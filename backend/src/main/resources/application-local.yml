@@ -1,0 +1,20 @@
+# Local Development Profile
+spring:
+  cloud:
+    gcp:
+      core:
+        enabled: false
+      firestore:
+        enabled: false
+      secretmanager:
+        enabled: false
+
+gcp:
+  firestore:
+    enabled: false
+  secret-manager:
+    enabled: false
+
+logging:
+  level:
+    com.soundwave.musicdiscovery: DEBUG

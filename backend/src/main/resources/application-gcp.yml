@@ -1,0 +1,27 @@
+# Google Cloud Platform Production Profile (Cloud Run)
+spring:
+  cloud:
+    gcp:
+      core:
+        enabled: true
+      firestore:
+        enabled: true
+      secretmanager:
+        enabled: true
+
+gcp:
+  firestore:
+    enabled: true
+  secret-manager:
+    enabled: true
+
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    connection-timeout: 20000
+
+logging:
+  pattern:
+    console: '{"severity":"%level","timestamp":"%d{yyyy-MM-dd''T''HH:mm:ss.SSSXXX}","logger":"%logger","message":"%msg"}%n'

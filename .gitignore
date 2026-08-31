@@ -1,0 +1,25 @@
+# Java / Maven
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+*.class
+
+# Node / Frontend
+**/node_modules/
+**/dist/
+**/build/
+.npm
+*.log
+
+# IDE & OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Secrets & Environment
+.env
+.env.local
+.env.*.local
+*.key
+*.pem

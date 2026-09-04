@@ -3,7 +3,7 @@ import Bubble from './Bubble';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 /**
- * BubbleConstellation - Renders an organic, non-uniform cluster of connected soap bubbles.
+ * BubbleConstellation - Organic cluster of floating soap bubbles
  */
 export default function BubbleConstellation({
   title,
@@ -17,7 +17,6 @@ export default function BubbleConstellation({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Pattern of sizes and offsets for natural, organic constellation rhythm
   const layoutPatterns = [
     { size: 'hero', offset: 'translate-y-1', delay: '0s' },
     { size: 'medium', offset: '-translate-y-4', delay: '0.6s' },
@@ -34,22 +33,22 @@ export default function BubbleConstellation({
   const displayTracks = isExpanded ? tracks : tracks.slice(0, 8);
 
   return (
-    <section className="mb-12 sm:mb-16">
+    <section className="mb-10 sm:mb-14">
       {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-6 sm:mb-8 px-1">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-6 px-1">
         <div>
           <div className="flex items-center gap-2.5">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-display">
               {title}
             </h2>
             {badge && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50/90 border border-indigo-200/80 px-2.5 py-0.5 rounded-full shadow-sm">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50/90 dark:bg-indigo-950/80 border border-indigo-200/80 dark:border-indigo-800 px-2.5 py-0.5 rounded-full shadow-sm">
                 {showAiBadge && <Sparkles className="w-3 h-3 text-indigo-500" />}
                 {badge}
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
             {subtitle}
           </p>
         </div>
@@ -58,7 +57,7 @@ export default function BubbleConstellation({
         {tracks.length > 5 && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition py-1 px-2.5 rounded-lg hover:bg-indigo-50/60 cursor-pointer group"
+            className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition py-1 px-3 rounded-full bubble-pill cursor-pointer group"
           >
             <span>{isExpanded ? 'Ver menos' : 'Ver todo'}</span>
             <ArrowRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : 'group-hover:translate-x-0.5'}`} />
@@ -66,7 +65,7 @@ export default function BubbleConstellation({
         )}
       </div>
 
-      {/* Constellation Container: Organic Horizontal Scroll or Expanded Grid */}
+      {/* Constellation Container */}
       {isExpanded ? (
         <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 py-4 px-2">
           {displayTracks.map((item, index) => {
@@ -101,7 +100,6 @@ export default function BubbleConstellation({
 
               return (
                 <React.Fragment key={track.id || index}>
-                  {/* The Track Bubble */}
                   <Bubble
                     track={track}
                     size={pattern.size}
@@ -114,15 +112,10 @@ export default function BubbleConstellation({
                     animationDelay={pattern.delay}
                   />
 
-                  {/* Occasional Small Ambient Connecting Bubble */}
+                  {/* Ambient Micro-Bubbles */}
                   {index % 3 === 1 && (
                     <div className="hidden sm:block flex-shrink-0 pointer-events-none">
-                      <div className="w-8 h-8 rounded-full soap-bubble opacity-60 transform translate-y-6 scale-90" />
-                    </div>
-                  )}
-                  {index % 4 === 2 && (
-                    <div className="hidden sm:block flex-shrink-0 pointer-events-none">
-                      <div className="w-5 h-5 rounded-full soap-bubble opacity-40 transform -translate-y-8" />
+                      <div className="w-8 h-8 rounded-full bubble-surface opacity-60 transform translate-y-6 scale-90" />
                     </div>
                   )}
                 </React.Fragment>

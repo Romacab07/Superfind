@@ -135,8 +135,9 @@ Cada cambio debe estar respaldado por pruebas:
    * Lógica de deduplicación e ingesta en `SyncOrchestratorServiceTest`.
 2. **Integration Tests (MockMvc + SpringBootTest)**:
    * Endpoints REST en `TrackControllerTest` (`/api/tracks/top-24h`, `/api/tracks/recent`, `/api/tracks/{id}/play`).
-3. **Frontend Build Validation**:
+3. **Frontend Build & Visual Verification**:
    * `npm run build` en el directorio `frontend/`.
+   * Auditoría de fidelidad visual y diseño por `visual_qa` (sin bloqueos críticos en composición, burbujas, player, dark mode ni responsive). Ver detalles en [`docs/team-agents.md`](file:///F:/WWZ/docs/team-agents.md).
 
 ---
 
@@ -154,6 +155,7 @@ Antes de dar por concluida una tarea:
 * [ ] Implementación de código completada y formateada.
 * [ ] Compilación exitosa sin errores (`.\mvnw.cmd compile`, `npm run build`).
 * [ ] Tests ejecutados y pasando al 100% (`.\mvnw.cmd test`).
+* [ ] Verificación de fidelidad visual por `visual_qa` (sin incidencias críticas de UI/UX).
 * [ ] Verificación de seguridad: cero secretos en código o logs.
 * [ ] Compatibilidad dual verificada (perfil `local` y `gcp`).
 * [ ] Documentación actualizada en `docs/` o `ARCHITECTURE.md` si hubo cambios de diseño.

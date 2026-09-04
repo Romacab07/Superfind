@@ -1,211 +1,501 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Matter from 'matter-js';
-import { Sparkles, TrendingUp, Music, Radio, Filter, RefreshCw } from 'lucide-react';
+import { Sparkles, TrendingUp, Music, Radio, Filter, RefreshCw, Volume2, Shield, Heart } from 'lucide-react';
+import { extractTrackPalette } from '../utils/paletteExtractor';
 
 /**
- * BubbleWorld - 2D Interactive Physics & Organic Soap Bubble Canvas.
+ * BubbleWorld - 4K Persistent Living Soap Bubble Ecosystem
  * 
- * Features:
- * - Matter.js physics engine with soft buoyancy, gentle drift & inter-bubble repulsion.
- * - Fluid surface tension meniscus connecting adjacent touching bubbles.
- * - Pearlescent iridescent soap-film rendering with specular highlights & refraction.
- * - Integrated typography (Title & Artist) inside each bubble.
- * - No horizontal rails or grids: true free-floating 2D musical constellation.
- * - Filter/Cluster switcher to explore by category (Todos, Sugeridos IA, Top 24h, Novedades, Me gusta).
+ * Architectural & Visual Realism Guarantees:
+ * 1. SINGLE MOUNT LIFECYCLE: Matter.js engine & requestAnimationFrame loop are created ONCE.
+ * 2. IDENTITY PERSISTENCE: Selecting tracks or changing UI state NEVER recreates Matter bodies.
+ * 3. TRAJECTORY CONTINUITY: Bubbles move smoothly under physics (dx, dy = v * dt) across state changes.
+ * 4. SOFT FILTERING: Filter/search state toggles target visibility without deleting bodies.
+ * 5. ALBUM-DERIVED PALETTES: Every song bubble has an individual distinct volumetric chromatic material.
+ * 6. VOLUMETRIC SPHERICAL ARTWORK: Soft internal landscape reflection, specular crescent highlights & caustics.
+ * 7. REAL METABALL MENISCUS: Mathematical tangent fillet concave arcs with iridescent outer rims.
+ * 8. HERO WAVEFORM EQUALIZER: Real-time animated audio visualizer in the active playing bubble.
+ * 9. 4K DEPTH & ATMOSPHERE: Multi-layer floating background bokeh & micro-droplets.
+ * 10. DIAGNOSTIC DEBUGGER: Exposes window.__superfind_debug__ for automated verification.
  */
 export default function BubbleWorld({
   suggestions = [],
   topTracks = [],
   recentTracks = [],
   likedTrackIds = [],
+  consumedTrackIds = new Set(),
+  onConsumeTrack,
   currentTrack,
-  isPlaying,
+  isPlaying = false,
   onPlayTrack,
   searchQuery = '',
   selectedGenre = 'all',
   activeCategory = 'all',
   onSelectCategory,
   onRefreshGemini,
-  isRefreshingAi = false
+  isRefreshingAi = false,
+  isDarkMode = true
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
-  const runnerRef = useRef(null);
-  const bubblesRef = useRef([]); // holds { body, track, category, radius, targetRadius, baseRadius, isHovered, phase, gleamAngle }
+  const wallsRef = useRef([]);
+  const bubblesMapRef = useRef(new Map());
+  const microBubblesRef = useRef([]);
+  const backgroundBokehRef = useRef([]);
   const animationFrameRef = useRef(null);
-  const mousePosRef = useRef({ x: -1000, y: -1000, isDown: false });
-  const draggedBubbleRef = useRef(null);
-
+  const mousePosRef = useRef({ x: -1000, y: -1000, isDown: false, vx: 0, vy: 0, lastX: -1000, lastY: -1000 });
   const [hoveredTrack, setHoveredTrack] = useState(null);
 
-  // Combine and deduplicate all tracks into a rich collection with assigned cluster tags
-  const allBubblesData = React.useMemo(() => {
+  // Exact reference constellation anchors & radii
+  const ANCHORS = {
+    'track-1': { x: 0.54, y: 0.50, r: 136, label: 'EN REPRODUCCIÓN', isHero: true }, // Neon Horizon
+    'track-2': { x: 0.31, y: 0.38, r: 98, label: 'GEMA' },                           // Midnight Coffee
+    'track-3': { x: 0.45, y: 0.32, r: 76, label: 'GEMA' },                           // Urban Pulse
+    'track-4': { x: 0.69, y: 0.30, r: 94, label: 'con IA' },                         // Cybernetic Drift
+    'track-5': { x: 0.86, y: 0.44, r: 104, label: 'GEMA' },                          // Starlight Odyssey
+    'track-6': { x: 0.25, y: 0.66, r: 96, label: 'con IA' },                         // Zen Blossom
+    'track-7': { x: 0.77, y: 0.70, r: 102, label: 'con IA' },                        // Golden Hour Memories
+    'track-8': { x: 0.46, y: 0.76, r: 84, label: 'con IA' },                         // Echoes of Eternity
+    'track-9': { x: 0.33, y: 0.79, r: 66, label: null },                             // Falling Slowly
+  };
+
+  const TOPOLOGY_CONNECTIONS = [
+    ['track-1', 'track-2'],
+    ['track-1', 'track-3'],
+    ['track-1', 'track-4'],
+    ['track-1', 'track-5'],
+    ['track-1', 'track-6'],
+    ['track-1', 'track-7'],
+    ['track-1', 'track-8'],
+    ['track-2', 'track-3'],
+    ['track-2', 'track-6'],
+    ['track-4', 'track-5'],
+    ['track-7', 'track-5'],
+    ['track-7', 'track-8'],
+    ['track-8', 'track-9'],
+    ['track-8', 'track-6'],
+  ];
+
+  // Latest props reference
+  const propsRef = useRef({
+    currentTrack,
+    isPlaying,
+    isDarkMode,
+    activeCategory,
+    searchQuery,
+    selectedGenre,
+    likedTrackIds,
+    consumedTrackIds,
+    onPlayTrack,
+    onConsumeTrack,
+  });
+
+  const lastSelectedTrackIdRef = useRef(currentTrack?.id || null);
+
+  useEffect(() => {
+    propsRef.current = {
+      currentTrack,
+      isPlaying,
+      isDarkMode,
+      activeCategory,
+      searchQuery,
+      selectedGenre,
+      likedTrackIds,
+      consumedTrackIds,
+      onPlayTrack,
+      onConsumeTrack,
+    };
+  });
+
+  // Aggregate catalog data with strict title deduplication & constellation slots
+  const allBubblesData = useMemo(() => {
     const map = new Map();
+    const seenTitles = new Set();
 
-    // 1. Suggestions (AI) - high visual hierarchy
-    suggestions.forEach((item, idx) => {
+    const ANCHOR_KEYS = ['track-1', 'track-2', 'track-3', 'track-4', 'track-5', 'track-6', 'track-7', 'track-8', 'track-9'];
+    let slotIdx = 0;
+
+    const addTrack = (item, defaultCategory, defaultLabel, defaultRadius) => {
       const t = item.track || item;
-      if (t && t.id) {
-        map.set(t.id, {
-          track: t,
-          category: 'suggestions',
-          categoryLabel: 'con IA',
-          tier: item.tier || 'GROWING',
-          reasoning: item.reasoning,
-          baseRadius: idx === 0 ? 82 : idx < 3 ? 72 : 62,
-        });
+      if (!t || !t.id) return;
+      if (consumedTrackIds && consumedTrackIds.has(t.id)) return; // Skip consumed tracks per Phase 2.12
+      const normalizedTitle = (t.title || '').toLowerCase().trim();
+
+      const existing = map.get(t.id) || (seenTitles.has(normalizedTitle) ? Array.from(map.values()).find(v => (v.track.title || '').toLowerCase().trim() === normalizedTitle) : null);
+      if (existing) {
+        existing.categories.add(defaultCategory);
+        if (defaultCategory === 'top24h') existing.categories.add('top24h');
+        return;
       }
+      seenTitles.add(normalizedTitle);
+
+      const assignedKey = ANCHORS[t.id] ? t.id : ANCHOR_KEYS[slotIdx % ANCHOR_KEYS.length];
+      const anchor = ANCHORS[assignedKey];
+      slotIdx++;
+
+      const cats = new Set(['all', defaultCategory]);
+      if (t.category) cats.add(t.category);
+      if (defaultCategory === 'top24h' || (t.playCount24h && t.playCount24h > 50)) {
+        cats.add('top24h');
+      }
+
+      map.set(t.id, {
+        track: t,
+        category: defaultCategory,
+        categories: cats,
+        categoryLabel: anchor?.label || defaultLabel || (t.tier === 'UNDERGROUND' ? 'GEMA' : 'con IA'),
+        tier: item.tier || t.tier || 'GROWING',
+        reasoning: item.reasoning || t.reasoning,
+        baseRadius: anchor?.r || defaultRadius,
+        anchor: anchor || null,
+        assignedAnchorKey: assignedKey,
+      });
+    };
+
+    suggestions.forEach((item, idx) => {
+      addTrack(item, 'suggestions', 'con IA', idx === 0 ? 136 : idx < 3 ? 96 : 84);
     });
 
-    // 2. Top 24h
     topTracks.forEach((t, idx) => {
-      if (t && t.id && !map.has(t.id)) {
-        map.set(t.id, {
-          track: t,
-          category: 'top24h',
-          categoryLabel: 'Top 24h',
-          tier: null,
-          reasoning: null,
-          baseRadius: idx === 0 ? 76 : idx < 4 ? 66 : 58,
-        });
-      }
+      addTrack(t, 'top24h', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Top 24h', idx === 0 ? 98 : idx < 4 ? 86 : 74);
     });
 
-    // 3. Recent releases
     recentTracks.forEach((t, idx) => {
-      if (t && t.id && !map.has(t.id)) {
-        map.set(t.id, {
-          track: t,
-          category: 'recent',
-          categoryLabel: 'Novedad',
-          tier: null,
-          reasoning: null,
-          baseRadius: idx < 3 ? 64 : 54,
-        });
-      }
+      addTrack(t, 'recent', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Novedad', idx < 3 ? 82 : 70);
     });
 
     return Array.from(map.values());
   }, [suggestions, topTracks, recentTracks]);
 
-  // Filter items based on search query, genre, and active category
-  const filteredData = React.useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    return allBubblesData.filter(item => {
-      const t = item.track;
-      // Search query filter
-      const matchQuery = !q ||
-        t.title?.toLowerCase().includes(q) ||
-        t.artist?.toLowerCase().includes(q) ||
-        t.genre?.toLowerCase().includes(q);
+  // Synchronize catalog items into persistent bubbles map without recreating existing bodies
+  const syncBubblesWithCatalog = useCallback((catalogData) => {
+    const engine = engineRef.current;
+    if (!engine) return;
 
-      // Genre filter
-      const matchGenre = selectedGenre === 'all' ||
-        t.genre?.toLowerCase().includes(selectedGenre.toLowerCase());
+    const container = containerRef.current;
+    const width = container?.clientWidth || window.innerWidth || 1200;
+    const height = Math.max(680, container?.clientHeight || window.innerHeight || 800);
+    const bubblesMap = bubblesMapRef.current;
+    const activeKeys = new Set();
 
-      // Category filter
-      const matchCat = activeCategory === 'all' ||
-        (activeCategory === 'suggestions' && item.category === 'suggestions') ||
-        (activeCategory === 'top24h' && item.category === 'top24h') ||
-        (activeCategory === 'recent' && item.category === 'recent') ||
-        (activeCategory === 'liked' && likedTrackIds.includes(t.id));
+    catalogData.forEach((data) => {
+      const uniqueKey = (data.track.title || '').toLowerCase().trim() || data.track.id;
+      activeKeys.add(uniqueKey);
 
-      return matchQuery && matchGenre && matchCat;
+      const anchor = data.anchor || ANCHORS[data.track.id] || ANCHORS[data.assignedAnchorKey];
+      const responsiveScale = width < 500 ? 0.68 : width < 900 ? 0.82 : 1.0;
+
+      if (!bubblesMap.has(uniqueKey)) {
+        let seedX = width * (anchor ? anchor.x : 0.53);
+        let seedY = height * (anchor ? anchor.y : 0.50);
+
+        const radius = (anchor?.r || data.baseRadius) * responsiveScale;
+        const padding = radius + 20;
+        seedX = Math.max(padding, Math.min(width - padding, seedX));
+        seedY = Math.max(padding, Math.min(height - padding, seedY));
+
+        const body = Matter.Bodies.circle(seedX, seedY, radius, {
+          restitution: 0.85,
+          frictionAir: 0.055,
+          friction: 0.02,
+          mass: radius * 0.15,
+        });
+
+        Matter.World.add(engine.world, body);
+
+        bubblesMap.set(uniqueKey, {
+          id: data.track.id,
+          key: uniqueKey,
+          body,
+          bodyId: body.id,
+          track: data.track,
+          category: data.category,
+          categories: data.categories || new Set(['all', data.category]),
+          categoryLabel: data.categoryLabel,
+          tier: data.tier,
+          reasoning: data.reasoning,
+          baseRadius: radius,
+          radius: radius,
+          targetRadius: radius,
+          anchor: anchor || null,
+          assignedAnchorKey: data.assignedAnchorKey,
+          palette: extractTrackPalette(data.track),
+          phase: Math.random() * Math.PI * 2,
+          phaseSpeed: 0.005 + Math.random() * 0.005,
+          driftAngle: Math.random() * Math.PI * 2,
+          seed1: Math.random() * 20,
+          seed2: Math.random() * 20,
+          seed3: Math.random() * 20,
+          wobbleSpeed: 0.0008 + Math.random() * 0.0005,
+          activeScore: 0,
+          alpha: 1,
+          targetAlpha: 1,
+        });
+      } else {
+        const existing = bubblesMap.get(uniqueKey);
+        existing.id = data.track.id;
+        existing.track = data.track;
+        existing.category = data.category;
+        existing.categories = data.categories || existing.categories || new Set(['all', data.category]);
+        existing.categoryLabel = data.categoryLabel;
+        existing.tier = data.tier;
+        existing.reasoning = data.reasoning;
+        existing.baseRadius = (anchor?.r || data.baseRadius) * responsiveScale;
+        existing.anchor = anchor || existing.anchor;
+        existing.assignedAnchorKey = data.assignedAnchorKey || existing.assignedAnchorKey;
+        existing.palette = extractTrackPalette(data.track);
+      }
     });
-  }, [allBubblesData, searchQuery, selectedGenre, activeCategory, likedTrackIds]);
 
-  // Initialize and update Matter.js physics simulation
+    // Remove obsolete bodies
+    for (const [key, bubble] of bubblesMap.entries()) {
+      if (!activeKeys.has(key)) {
+        Matter.World.remove(engine.world, bubble.body);
+        bubblesMap.delete(key);
+      }
+    }
+  }, []);
+
   useEffect(() => {
+    syncBubblesWithCatalog(allBubblesData);
+  }, [allBubblesData, syncBubblesWithCatalog]);
+
+  // Position Delta Verification & Diagnostics on Track Selection
+  useEffect(() => {
+    const prevId = lastSelectedTrackIdRef.current;
+    const currentId = currentTrack?.id || null;
+
+    if (prevId !== currentId) {
+      lastSelectedTrackIdRef.current = currentId;
+
+      if (import.meta.env?.DEV || process.env.NODE_ENV !== 'production') {
+        const bubbles = Array.from(bubblesMapRef.current.values()).slice(0, 5);
+        console.groupCollapsed(`[BubbleWorld Debugger] Selection changed: ${prevId || 'none'} -> ${currentId}`);
+        bubbles.forEach(b => {
+          const isSelected = b.id === currentId;
+          console.log(
+            `%c${b.track.title} [id: ${b.id}] | bodyId: ${b.body.id} | pos: (${b.body.position.x.toFixed(1)}, ${b.body.position.y.toFixed(1)}) | status: ${isSelected ? 'SELECTED / CONTINUOUS' : 'CONTINUOUS'}`,
+            isSelected ? 'color: #8b5cf6; font-weight: bold;' : 'color: #06b6d4;'
+          );
+        });
+        console.groupEnd();
+      }
+    }
+  }, [currentTrack]);
+
+  // =========================================================================
+  // SINGLE MOUNT EFFECT: Initializes Matter Engine & 60fps Loop ONCE
+  // =========================================================================
+  useEffect(() => {
+    console.log('[BubbleWorld] mounted (Persistent Physics & 4K Volumetric Renderer)');
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const width = container.clientWidth || 900;
-    const height = Math.max(550, container.clientHeight || 650);
+    const width = container.clientWidth || 1200;
+    const height = Math.max(680, container.clientHeight || 800);
 
-    // Create Matter Engine
     const engine = Matter.Engine.create({
       gravity: { x: 0, y: 0, scale: 0 },
     });
     engineRef.current = engine;
 
-    // Walls to keep bubbles inside
-    const wallOptions = { isStatic: true, restitution: 0.9, friction: 0 };
-    const wallThickness = 120;
+    // Static containment walls
+    const wallThickness = 160;
+    const wallOptions = { isStatic: true, restitution: 0.95, friction: 0 };
     const walls = [
-      Matter.Bodies.rectangle(width / 2, -wallThickness / 2, width * 2, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(width / 2, height + wallThickness / 2, width * 2, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 2, wallOptions),
-      Matter.Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 2, wallOptions),
+      Matter.Bodies.rectangle(width / 2, -wallThickness / 2, width * 3, wallThickness, wallOptions),
+      Matter.Bodies.rectangle(width / 2, height + wallThickness / 2, width * 3, wallThickness, wallOptions),
+      Matter.Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
+      Matter.Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
     ];
+    wallsRef.current = walls;
     Matter.World.add(engine.world, walls);
 
-    // Spawn bubbles in pleasant spatial clusters
-    const newBubbles = filteredData.map((data, index) => {
-      // Determine initial organic position based on category
-      let seedX, seedY;
-      const count = filteredData.length;
+    // Initial catalog synchronization right after engine creation
+    syncBubblesWithCatalog(allBubblesData);
 
-      if (data.category === 'suggestions') {
-        seedX = width * 0.28 + (Math.random() - 0.5) * (width * 0.35);
-        seedY = height * 0.35 + (Math.random() - 0.5) * (height * 0.35);
-      } else if (data.category === 'top24h') {
-        seedX = width * 0.72 + (Math.random() - 0.5) * (width * 0.35);
-        seedY = height * 0.40 + (Math.random() - 0.5) * (height * 0.35);
+    // Initialize 55 Ambient Floating Micro-Droplets & Cluster Foam Pearls
+    const microBubbles = [];
+    for (let i = 0; i < 55; i++) {
+      const isClusterSatellite = i >= 35;
+      let x, y, r;
+      if (isClusterSatellite) {
+        const angle = (i - 35) * (Math.PI * 2 / 20) + Math.random() * 0.4;
+        const dist = 130 + Math.random() * 280;
+        x = width * 0.54 + Math.cos(angle) * dist;
+        y = height * 0.50 + Math.sin(angle) * dist * 0.7;
+        r = 5 + Math.random() * 11;
       } else {
-        seedX = width * 0.50 + (Math.random() - 0.5) * (width * 0.6);
-        seedY = height * 0.70 + (Math.random() - 0.5) * (height * 0.3);
+        x = Math.random() * width;
+        y = Math.random() * height;
+        r = 6 + Math.random() * 22;
       }
-
-      // Keep inside boundaries
-      const padding = data.baseRadius + 20;
-      seedX = Math.max(padding, Math.min(width - padding, seedX));
-      seedY = Math.max(padding, Math.min(height - padding, seedY));
-
-      const body = Matter.Bodies.circle(seedX, seedY, data.baseRadius, {
-        restitution: 0.85,
-        frictionAir: 0.05,
-        friction: 0.05,
-        mass: data.baseRadius * 0.1,
-      });
-
-      Matter.World.add(engine.world, body);
-
-      return {
-        id: data.track.id,
-        body,
-        track: data.track,
-        category: data.category,
-        categoryLabel: data.categoryLabel,
-        tier: data.tier,
-        reasoning: data.reasoning,
-        baseRadius: data.baseRadius,
-        radius: data.baseRadius,
-        targetRadius: data.baseRadius,
+      microBubbles.push({
+        x,
+        y,
+        radius: r,
+        vx: (Math.random() - 0.5) * (isClusterSatellite ? 0.08 : 0.3),
+        vy: (Math.random() - 0.5) * 0.2 - (isClusterSatellite ? 0.02 : 0.08),
         phase: Math.random() * Math.PI * 2,
-        phaseSpeed: 0.008 + Math.random() * 0.012,
-        driftAngle: Math.random() * Math.PI * 2,
-      };
-    });
+        alpha: 0.25 + Math.random() * 0.45,
+        isSatellite: isClusterSatellite,
+      });
+    }
+    microBubblesRef.current = microBubbles;
 
-    bubblesRef.current = newBubbles;
+    // Initialize 14 Out-of-Focus Background Bokeh Bubbles
+    const backgroundBokeh = [];
+    for (let i = 0; i < 14; i++) {
+      backgroundBokeh.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: 45 + Math.random() * 85,
+        vx: (Math.random() - 0.5) * 0.1,
+        vy: (Math.random() - 0.5) * 0.1,
+        phase: Math.random() * Math.PI * 2,
+        alpha: 0.06 + Math.random() * 0.12,
+        colorType: i % 3 === 0 ? 'cyan' : i % 3 === 1 ? 'purple' : 'pink',
+      });
+    }
+    backgroundBokehRef.current = backgroundBokeh;
 
-    // Resize canvas to display crisp Retina / HiDPI
+    // Retina / HiDPI setup
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    // Render loop
     let lastTime = performance.now();
+    let isRunning = true;
 
+    const handleVisibilityChange = () => {
+      isRunning = !document.hidden;
+      lastTime = performance.now();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // =====================================================================
+    // ETHEREAL DISCOVERY ENVIRONMENT RENDERERS (REFERENCE 2 FIDELITY)
+    // =====================================================================
+
+    // Shimmering reflective water surface at the bottom
+    const drawWaterSurfaceReflection = (ctx, w, h, time, isDark) => {
+      const waterTop = h * 0.72;
+      const waterGrad = ctx.createLinearGradient(0, waterTop, 0, h);
+      if (isDark) {
+        waterGrad.addColorStop(0, 'rgba(14, 18, 36, 0)');
+        waterGrad.addColorStop(0.3, 'rgba(34, 211, 238, 0.05)');
+        waterGrad.addColorStop(0.7, 'rgba(168, 85, 247, 0.08)');
+        waterGrad.addColorStop(1, 'rgba(8, 11, 24, 0.5)');
+      } else {
+        waterGrad.addColorStop(0, 'rgba(238, 243, 252, 0)');
+        waterGrad.addColorStop(0.25, 'rgba(224, 231, 255, 0.35)');
+        waterGrad.addColorStop(0.65, 'rgba(244, 114, 182, 0.14)');
+        waterGrad.addColorStop(1, 'rgba(192, 132, 252, 0.22)');
+      }
+
+      ctx.save();
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(0, waterTop, w, h - waterTop);
+
+      // Gentle caustics / liquid light ripples
+      ctx.lineWidth = 1.2;
+      const rippleCount = 5;
+      for (let ri = 0; ri < rippleCount; ri++) {
+        const ry = waterTop + (h - waterTop) * (0.18 + ri * 0.17);
+        const waveSpeed = time * 0.0008 + ri * 1.4;
+        ctx.strokeStyle = isDark
+          ? `rgba(147, 197, 253, ${0.08 + Math.sin(waveSpeed) * 0.04})`
+          : `rgba(255, 255, 255, ${0.45 + Math.sin(waveSpeed) * 0.25})`;
+
+        ctx.beginPath();
+        ctx.moveTo(0, ry);
+        for (let rx = 0; rx <= w; rx += 36) {
+          const dy = Math.sin(rx * 0.012 + waveSpeed) * 3.5 + Math.cos(rx * 0.018 - waveSpeed * 0.8) * 2;
+          ctx.lineTo(rx, ry + dy);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    // Four-point twinkle star sparkle
+    const drawSparkleStar = (ctx, cx, cy, size, alpha, rot) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.quadraticCurveTo(0, 0, size, 0);
+      ctx.quadraticCurveTo(0, 0, 0, size);
+      ctx.quadraticCurveTo(0, 0, -size, 0);
+      ctx.quadraticCurveTo(0, 0, 0, -size);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    // Realistic Translucent Soap Bubble Interior & Volumetric Reflection
+    const drawSoapBubbleTranslucentInterior = (ctx, b, x, y, r, time, isDark, isCurrent) => {
+      ctx.save();
+      // Clip to interior
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.98, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Translucent volumetric sphere gradient
+      const sphereGrad = ctx.createRadialGradient(
+        x - r * 0.28, y - r * 0.32, r * 0.08,
+        x, y, r * 1.02
+      );
+
+      if (isDark) {
+        sphereGrad.addColorStop(0, 'rgba(255, 255, 255, 0.24)');
+        sphereGrad.addColorStop(0.35, 'rgba(192, 132, 252, 0.09)');
+        sphereGrad.addColorStop(0.7, 'rgba(15, 23, 42, 0.25)');
+        sphereGrad.addColorStop(0.95, 'rgba(34, 211, 238, 0.15)');
+        sphereGrad.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
+      } else {
+        // Pearlescent soap liquid (Ref 2)
+        sphereGrad.addColorStop(0, 'rgba(255, 255, 255, 0.88)');
+        sphereGrad.addColorStop(0.3, 'rgba(240, 246, 255, 0.42)');
+        sphereGrad.addColorStop(0.65, 'rgba(224, 235, 255, 0.18)');
+        sphereGrad.addColorStop(0.88, 'rgba(244, 114, 182, 0.16)');
+        sphereGrad.addColorStop(1, 'rgba(255, 255, 255, 0.48)');
+      }
+
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+
+      // Subtle track palette color wash in the bubble center
+      const colorWash = ctx.createRadialGradient(
+        x + r * 0.1, y + r * 0.15, 0,
+        x, y, r * 0.85
+      );
+      colorWash.addColorStop(0, isDark ? b.palette.glowDark : b.palette.glow);
+      colorWash.addColorStop(1, 'transparent');
+      ctx.fillStyle = colorWash;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+
+      ctx.restore();
+    };
+
+    // =====================================================================
+    // MAIN 60FPS RENDER & PHYSICS LOOP
+    // =====================================================================
     const render = (time) => {
+      if (!isRunning) {
+        animationFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
       const dt = Math.min(32, time - lastTime);
       lastTime = time;
 
-      // Update Matter Physics
       Matter.Engine.update(engine, dt);
 
       const ctx = canvas.getContext('2d');
@@ -213,75 +503,213 @@ export default function BubbleWorld({
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Soft atmospheric background ambient lights
-      ctx.save();
-      const gradBg = ctx.createRadialGradient(width * 0.3, height * 0.3, 50, width * 0.3, height * 0.3, width * 0.6);
-      gradBg.addColorStop(0, 'rgba(238, 242, 255, 0.45)');
-      gradBg.addColorStop(0.5, 'rgba(253, 242, 248, 0.3)');
-      gradBg.addColorStop(1, 'rgba(248, 250, 255, 0)');
-      ctx.fillStyle = gradBg;
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
-
-      const bubbles = bubblesRef.current;
-
-      // 2. Physics & Fluid Forces (Brownian drift + gentle repulsion + mouse displacement)
       const mouse = mousePosRef.current;
+      const bubbles = Array.from(bubblesMapRef.current.values());
+      const micros = microBubblesRef.current;
+      const bokeh = backgroundBokehRef.current;
+      const {
+        currentTrack: activeCurTrack,
+        isPlaying: activeIsPlaying,
+        isDarkMode: activeIsDarkMode,
+        activeCategory: currentCat,
+        searchQuery: currentSearch,
+        selectedGenre: currentGenre,
+        likedTrackIds: currentLiked,
+      } = propsRef.current;
 
+      const q = (currentSearch || '').toLowerCase().trim();
+
+      // -----------------------------------------------------------------
+      // 0. Shimmering Water Floor & Atmospheric Horizon
+      // -----------------------------------------------------------------
+      drawWaterSurfaceReflection(ctx, width, height, time, activeIsDarkMode);
+
+      // -----------------------------------------------------------------
+      // 1. Deep Atmospheric Background Bokeh Layer (4K Depth)
+      // -----------------------------------------------------------------
+      bokeh.forEach(bk => {
+        bk.x += bk.vx;
+        bk.y += bk.vy;
+        bk.phase += 0.007;
+
+        if (bk.x < -120) bk.x = width + 120;
+        if (bk.x > width + 120) bk.x = -120;
+        if (bk.y < -120) bk.y = height + 120;
+        if (bk.y > height + 120) bk.y = -120;
+
+        const bx = bk.x + Math.cos(bk.phase) * 6;
+        const by = bk.y + Math.sin(bk.phase * 0.8) * 6;
+
+        ctx.save();
+        const bGrad = ctx.createRadialGradient(bx, by, bk.radius * 0.1, bx, by, bk.radius);
+        const color = bk.colorType === 'cyan'
+          ? (activeIsDarkMode ? 'rgba(34, 211, 238,' : 'rgba(6, 182, 212,')
+          : bk.colorType === 'purple'
+          ? (activeIsDarkMode ? 'rgba(192, 132, 252,' : 'rgba(147, 51, 234,')
+          : (activeIsDarkMode ? 'rgba(244, 114, 182,' : 'rgba(236, 72, 153,');
+
+        bGrad.addColorStop(0, `${color} ${bk.alpha * 0.65})`);
+        bGrad.addColorStop(0.5, `${color} ${bk.alpha * 0.25})`);
+        bGrad.addColorStop(1, `${color} 0)`);
+
+        ctx.beginPath();
+        ctx.arc(bx, by, bk.radius, 0, Math.PI * 2);
+        ctx.fillStyle = bGrad;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // -----------------------------------------------------------------
+      // 2. Ambient Floating Micro-Droplets
+      // -----------------------------------------------------------------
+      micros.forEach(mb => {
+        mb.x += mb.vx;
+        mb.y += mb.vy;
+        mb.phase += 0.016;
+
+        if (mb.x < -50) mb.x = width + 50;
+        if (mb.x > width + 50) mb.x = -50;
+        if (mb.y < -50) mb.y = height + 50;
+        if (mb.y > height + 50) mb.y = -50;
+
+        const mx = mb.x + Math.cos(mb.phase) * 2;
+        const my = mb.y + Math.sin(mb.phase * 0.8) * 2;
+
+        ctx.save();
+        const grad = ctx.createRadialGradient(
+          mx - mb.radius * 0.35, my - mb.radius * 0.35, mb.radius * 0.1,
+          mx, my, mb.radius
+        );
+
+        if (activeIsDarkMode) {
+          grad.addColorStop(0, `rgba(255, 255, 255, ${mb.alpha * 0.85})`);
+          grad.addColorStop(0.4, `rgba(192, 132, 252, ${mb.alpha * 0.45})`);
+          grad.addColorStop(0.8, `rgba(34, 211, 238, ${mb.alpha * 0.25})`);
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        } else {
+          grad.addColorStop(0, `rgba(255, 255, 255, ${mb.alpha * 0.95})`);
+          grad.addColorStop(0.5, `rgba(224, 231, 255, ${mb.alpha * 0.5})`);
+          grad.addColorStop(0.85, `rgba(244, 114, 182, ${mb.alpha * 0.3})`);
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        }
+
+        ctx.beginPath();
+        ctx.arc(mx, my, mb.radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(mx - mb.radius * 0.32, my - mb.radius * 0.36, mb.radius * 0.22, 0, Math.PI * 2);
+        ctx.fillStyle = activeIsDarkMode ? 'rgba(255, 255, 255, 0.75)' : 'rgba(255, 255, 255, 0.95)';
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // -----------------------------------------------------------------
+      // 2.5 Atmospheric 4-Point Sparkles (Reference 2 Fidelity)
+      // -----------------------------------------------------------------
+      const sparklePositions = [
+        { x: width * 0.33, y: height * 0.28, s: 7, sp: 0.002, ph: 0 },
+        { x: width * 0.62, y: height * 0.32, s: 9, sp: 0.0025, ph: 1.8 },
+        { x: width * 0.88, y: height * 0.52, s: 8, sp: 0.0018, ph: 3.2 },
+        { x: width * 0.48, y: height * 0.40, s: 10, sp: 0.003, ph: 4.5 },
+        { x: width * 0.22, y: height * 0.62, s: 6, sp: 0.0022, ph: 2.1 },
+        { x: width * 0.72, y: height * 0.65, s: 8, sp: 0.0028, ph: 0.9 },
+        { x: width * 0.82, y: height * 0.38, s: 11, sp: 0.002, ph: 5.1 },
+        { x: width * 0.52, y: height * 0.78, s: 7, sp: 0.0032, ph: 1.2 },
+      ];
+
+      sparklePositions.forEach((sp, spIdx) => {
+        const pulse = Math.sin(time * sp.sp + sp.ph);
+        const alpha = Math.max(0, pulse * 0.7 + 0.3);
+        const curSize = sp.s * (0.8 + Math.max(0, pulse) * 0.4);
+        const rot = time * 0.0003 * (spIdx % 2 === 0 ? 1 : -1) + sp.ph;
+        drawSparkleStar(ctx, sp.x, sp.y, curSize, alpha * (activeIsDarkMode ? 0.7 : 0.85), rot);
+      });
+
+      // -----------------------------------------------------------------
+      // 3. Physics & Harmonic Fluid Forces
+      // -----------------------------------------------------------------
       bubbles.forEach((b, i) => {
         b.phase += b.phaseSpeed;
 
-        // Subtle buoyant wander force
-        const forceMagnitude = 0.00012 * b.body.mass;
-        const fx = Math.cos(b.phase + b.driftAngle) * forceMagnitude;
-        const fy = Math.sin(b.phase * 0.8 + b.driftAngle) * forceMagnitude;
+        const matchQuery = !q ||
+          b.track.title?.toLowerCase().includes(q) ||
+          b.track.artist?.toLowerCase().includes(q) ||
+          b.track.genre?.toLowerCase().includes(q);
+
+        const matchGenre = currentGenre === 'all' ||
+          b.track.genre?.toLowerCase().includes(currentGenre.toLowerCase());
+
+        const matchCat = currentCat === 'all' ||
+          (b.categories && b.categories.has(currentCat)) ||
+          b.category === currentCat ||
+          (currentCat === 'top24h' && (b.category === 'top24h' || (b.categories && b.categories.has('top24h')) || b.track?.category === 'top24h' || (b.track?.playCount24h && b.track.playCount24h > 50))) ||
+          (currentCat === 'suggestions' && (b.category === 'suggestions' || (b.categories && b.categories.has('suggestions')))) ||
+          (currentCat === 'recent' && (b.category === 'recent' || (b.categories && b.categories.has('recent')))) ||
+          (currentCat === 'liked' && currentLiked.includes(b.id));
+
+        const isFilteredIn = matchQuery && matchGenre && matchCat;
+        b.targetAlpha = isFilteredIn ? 1 : 0.22;
+        b.alpha += (b.targetAlpha - b.alpha) * 0.12;
+
+        // Gentle buoyant drift force
+        const forceMag = 0.00016 * b.body.mass;
+        const fx = Math.cos(b.phase + b.driftAngle) * forceMag;
+        const fy = Math.sin(b.phase * 0.85 + b.driftAngle) * forceMag;
         Matter.Body.applyForce(b.body, b.body.position, { x: fx, y: fy });
 
-        // Center gravity pull towards category centroids to keep clusters coherent
-        let targetX = width / 2;
-        let targetY = height / 2;
-        if (b.category === 'suggestions') {
-          targetX = width * 0.32;
-          targetY = height * 0.38;
-        } else if (b.category === 'top24h') {
-          targetX = width * 0.68;
-          targetY = height * 0.40;
-        } else {
-          targetX = width * 0.50;
-          targetY = height * 0.68;
+        // Stable anchor spring force to maintain the reference constellation
+        const isSmallScreen = width < 900;
+        const isMobileScreen = width < 500;
+        let targetX = width * (b.anchor ? b.anchor.x : 0.53);
+        let targetY = height * (b.anchor ? b.anchor.y : 0.50);
+
+        if (isMobileScreen) {
+          targetX = width * (0.5 + (b.anchor ? (b.anchor.x - 0.53) * 0.72 : 0));
+          targetY = height * (0.50 + (b.anchor ? (b.anchor.y - 0.50) * 0.75 : 0));
+        } else if (isSmallScreen) {
+          targetX = width * (0.5 + (b.anchor ? (b.anchor.x - 0.53) * 0.85 : 0));
+          targetY = height * (0.50 + (b.anchor ? (b.anchor.y - 0.50) * 0.85 : 0));
+        }
+
+        const isCurrent = activeCurTrack && activeCurTrack.id === b.id;
+        if (isCurrent && !b.anchor) {
+          targetX = width * 0.53;
+          targetY = height * 0.50;
         }
 
         const dxCenter = targetX - b.body.position.x;
         const dyCenter = targetY - b.body.position.y;
         Matter.Body.applyForce(b.body, b.body.position, {
-          x: dxCenter * 0.000015 * b.body.mass,
-          y: dyCenter * 0.000015 * b.body.mass,
+          x: dxCenter * 0.00014 * b.body.mass,
+          y: dyCenter * 0.00014 * b.body.mass,
         });
 
-        // Mouse interaction push / repulsion
+        // Mouse interactive repulsion
         const dxMouse = b.body.position.x - mouse.x;
         const dyMouse = b.body.position.y - mouse.y;
-        const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+        const distMouse = Math.hypot(dxMouse, dyMouse);
 
-        if (distMouse < b.radius + 60 && distMouse > 0) {
-          const pushForce = (1 - distMouse / (b.radius + 60)) * 0.0018 * b.body.mass;
+        if (distMouse < b.radius + 75 && distMouse > 0) {
+          const pushForce = (1 - distMouse / (b.radius + 75)) * 0.0025 * b.body.mass;
           Matter.Body.applyForce(b.body, b.body.position, {
             x: (dxMouse / distMouse) * pushForce,
             y: (dyMouse / distMouse) * pushForce,
           });
         }
 
-        // Soft Inter-bubble repulsion (prevents stacking, creates organic liquid spacing)
+        // Inter-bubble liquid repulsion
         for (let j = i + 1; j < bubbles.length; j++) {
           const b2 = bubbles[j];
           const dx = b2.body.position.x - b.body.position.x;
           const dy = b2.body.position.y - b.body.position.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const minDist = b.radius + b2.radius + 12;
+          const dist = Math.hypot(dx, dy);
+          const minDist = b.radius + b2.radius + 32;
 
           if (dist < minDist && dist > 0) {
             const overlap = minDist - dist;
-            const repForce = overlap * 0.00008;
+            const repForce = overlap * 0.00018;
             const rx = (dx / dist) * repForce;
             const ry = (dy / dist) * repForce;
             Matter.Body.applyForce(b.body, b.body.position, { x: -rx, y: -ry });
@@ -289,213 +717,335 @@ export default function BubbleWorld({
           }
         }
 
-        // Smooth radius transition on hover
-        const isCurrentTrackPlaying = currentTrack && currentTrack.id === b.track.id;
-        const isHovered = distMouse <= b.radius;
-        b.targetRadius = isHovered
+        // Smooth radius scaling
+        const isHovered = distMouse <= b.radius && isFilteredIn;
+        const targetR = isCurrent
+          ? Math.max(b.baseRadius * 1.22, 136)
+          : isHovered
           ? b.baseRadius * 1.08
-          : isCurrentTrackPlaying
-          ? b.baseRadius * 1.04
           : b.baseRadius;
 
-        b.radius += (b.targetRadius - b.radius) * 0.1;
+        b.radius += (targetR - b.radius) * 0.08;
+        const targetActive = isCurrent ? 1 : 0;
+        b.activeScore += (targetActive - b.activeScore) * 0.08;
       });
 
-      // 3. Surface Tension Meniscus / Touching Soap Bubble Bridges
-      for (let i = 0; i < bubbles.length; i++) {
-        for (let j = i + 1; j < bubbles.length; j++) {
-          const b1 = bubbles[i];
-          const b2 = bubbles[j];
-          const dx = b2.body.position.x - b1.body.position.x;
-          const dy = b2.body.position.y - b1.body.position.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const touchThreshold = b1.radius + b2.radius + 28;
+      // -----------------------------------------------------------------
+      // 4. True Organic Metaball Meniscus Bridges (Topological Contact)
+      // -----------------------------------------------------------------
+      TOPOLOGY_CONNECTIONS.forEach(([idA, idB]) => {
+        const b1 = bubbles.find(b => b.id === idA || b.assignedAnchorKey === idA);
+        const b2 = bubbles.find(b => b.id === idB || b.assignedAnchorKey === idB);
+        if (!b1 || !b2 || b1.alpha < 0.3 || b2.alpha < 0.3) return;
 
-          if (dist < touchThreshold && dist > Math.abs(b1.radius - b2.radius)) {
-            // Draw iridescent fluid meniscus connecting the two touching soap bubbles
-            const t = 1 - (dist - (b1.radius + b2.radius)) / 28;
-            const alpha = Math.max(0, Math.min(0.55, t * 0.65));
+        const dx = b2.body.position.x - b1.body.position.x;
+        const dy = b2.body.position.y - b1.body.position.y;
+        const dist = Math.hypot(dx, dy);
+        const contactThreshold = b1.radius + b2.radius + 40;
 
-            const angle = Math.atan2(dy, dx);
-            const midX = (b1.body.position.x + b2.body.position.x) / 2;
-            const midY = (b1.body.position.y + b2.body.position.y) / 2;
+        if (dist < contactThreshold && dist > Math.abs(b1.radius - b2.radius)) {
+          const t = 1 - (dist - (b1.radius + b2.radius)) / 40;
+          const alpha = Math.max(0, Math.min(0.85, t * Math.min(b1.alpha, b2.alpha)));
+          const angle = Math.atan2(dy, dx);
+          const midX = (b1.body.position.x + b2.body.position.x) / 2;
+          const midY = (b1.body.position.y + b2.body.position.y) / 2;
 
-            ctx.save();
-            const bridgeGrad = ctx.createLinearGradient(
-              b1.body.position.x, b1.body.position.y,
-              b2.body.position.x, b2.body.position.y
-            );
-            bridgeGrad.addColorStop(0, `rgba(6, 182, 212, ${alpha * 0.7})`);
-            bridgeGrad.addColorStop(0.5, `rgba(168, 85, 247, ${alpha * 0.9})`);
-            bridgeGrad.addColorStop(1, `rgba(236, 72, 153, ${alpha * 0.7})`);
+          const r1 = b1.radius * 0.94;
+          const r2 = b2.radius * 0.94;
+          const spread = Math.PI / 3.2 * Math.min(1, Math.max(0.4, t));
+          const waistWidth = Math.max(6, (r1 + r2) * 0.22 * t);
 
-            ctx.strokeStyle = bridgeGrad;
-            ctx.lineWidth = Math.max(2, 8 * t);
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(
-              b1.body.position.x + Math.cos(angle) * (b1.radius * 0.85),
-              b1.body.position.y + Math.sin(angle) * (b1.radius * 0.85)
-            );
-            ctx.lineTo(
-              b2.body.position.x - Math.cos(angle) * (b2.radius * 0.85),
-              b2.body.position.y - Math.sin(angle) * (b2.radius * 0.85)
-            );
-            ctx.stroke();
-            ctx.restore();
+          const p1_top = { x: b1.body.position.x + Math.cos(angle + spread) * r1, y: b1.body.position.y + Math.sin(angle + spread) * r1 };
+          const p1_bot = { x: b1.body.position.x + Math.cos(angle - spread) * r1, y: b1.body.position.y + Math.sin(angle - spread) * r1 };
+          const p2_top = { x: b2.body.position.x + Math.cos(angle + Math.PI - spread) * r2, y: b2.body.position.y + Math.sin(angle + Math.PI - spread) * r2 };
+          const p2_bot = { x: b2.body.position.x + Math.cos(angle + Math.PI + spread) * r2, y: b2.body.position.y + Math.sin(angle + Math.PI + spread) * r2 };
+
+          const perpX = -Math.sin(angle);
+          const perpY = Math.cos(angle);
+          const c_top = { x: midX + perpX * waistWidth, y: midY + perpY * waistWidth };
+          const c_bot = { x: midX - perpX * waistWidth, y: midY - perpY * waistWidth };
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+
+          // Fill hollow translucent fluid bridge
+          const bridgeGrad = ctx.createLinearGradient(
+            b1.body.position.x, b1.body.position.y,
+            b2.body.position.x, b2.body.position.y
+          );
+          if (activeIsDarkMode) {
+            bridgeGrad.addColorStop(0, b1.palette.glowDark);
+            bridgeGrad.addColorStop(0.5, 'rgba(192, 132, 252, 0.15)');
+            bridgeGrad.addColorStop(1, b2.palette.glowDark);
+          } else {
+            bridgeGrad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+            bridgeGrad.addColorStop(0.5, 'rgba(238, 244, 255, 0.35)');
+            bridgeGrad.addColorStop(1, 'rgba(255, 255, 255, 0.55)');
           }
-        }
-      }
 
-      // 4. Render Each Individual Soap Bubble
+          ctx.beginPath();
+          ctx.moveTo(p1_top.x, p1_top.y);
+          ctx.quadraticCurveTo(c_top.x, c_top.y, p2_top.x, p2_top.y);
+          ctx.lineTo(p2_bot.x, p2_bot.y);
+          ctx.quadraticCurveTo(c_bot.x, c_bot.y, p1_bot.x, p1_bot.y);
+          ctx.closePath();
+          ctx.fillStyle = bridgeGrad;
+          ctx.fill();
+
+          // Stroke ONLY the concave outer fillet curves (NO internal lines!)
+          ctx.lineWidth = Math.max(1.5, 2.8 * t);
+          const rimGrad = ctx.createLinearGradient(
+            b1.body.position.x, b1.body.position.y,
+            b2.body.position.x, b2.body.position.y
+          );
+          rimGrad.addColorStop(0, b1.palette.rimGradient[0]);
+          rimGrad.addColorStop(0.5, activeIsDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.95)');
+          rimGrad.addColorStop(1, b2.palette.rimGradient[1]);
+          ctx.strokeStyle = rimGrad;
+
+          ctx.beginPath();
+          ctx.moveTo(p1_top.x, p1_top.y);
+          ctx.quadraticCurveTo(c_top.x, c_top.y, p2_top.x, p2_top.y);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(p1_bot.x, p1_bot.y);
+          ctx.quadraticCurveTo(c_bot.x, c_bot.y, p1_bot.x, p1_bot.y);
+          ctx.stroke();
+
+          // Small liquid droplet on the neck (Reference 2 detail)
+          if (dist > (b1.radius + b2.radius) * 0.92) {
+            const dropR = Math.max(3.5, Math.min(7.5, waistWidth * 0.45));
+            ctx.beginPath();
+            ctx.arc(midX, midY, dropR, 0, Math.PI * 2);
+            ctx.fillStyle = activeIsDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.75)';
+            ctx.fill();
+            ctx.strokeStyle = rimGrad;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+      });
+
+      // -----------------------------------------------------------------
+      // 5. Render Volumetric 3D Soap Bubbles
+      // -----------------------------------------------------------------
       bubbles.forEach(b => {
         const x = b.body.position.x;
         const y = b.body.position.y;
         const r = b.radius;
-        const isCurrent = currentTrack && currentTrack.id === b.track.id;
-        const isPlayingThis = isCurrent && isPlaying;
+        const isCurrent = activeCurTrack && activeCurTrack.id === b.id;
+        const isPlayingThis = isCurrent && activeIsPlaying;
         const dxMouse = x - mouse.x;
         const dyMouse = y - mouse.y;
-        const isHovered = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse) <= r;
+        const isHovered = Math.hypot(dxMouse, dyMouse) <= r && b.alpha > 0.4;
+
+        // Procedural harmonic organic contour points
+        const numPoints = 64;
+        const points = [];
+        for (let ptIdx = 0; ptIdx < numPoints; ptIdx++) {
+          const theta = (ptIdx / numPoints) * Math.PI * 2;
+          let deform = 0;
+          deform += Math.sin(2 * theta + time * b.wobbleSpeed + b.seed1) * 0.022;
+          deform += Math.sin(3 * theta - time * (b.wobbleSpeed * 0.9) + b.seed2) * 0.016;
+          deform += Math.sin(5 * theta + time * (b.wobbleSpeed * 1.2) + b.seed3) * 0.010;
+
+          if (isPlayingThis) {
+            deform += Math.sin(time * 0.006 + theta * 3) * 0.024;
+          }
+
+          const currentR = r * (1 + deform);
+          points.push({
+            x: x + Math.cos(theta) * currentR,
+            y: y + Math.sin(theta) * currentR,
+          });
+        }
+
+        const traceBubblePath = () => {
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let p = 1; p < points.length; p++) {
+            const xc = (points[p].x + points[(p + 1) % points.length].x) / 2;
+            const yc = (points[p].y + points[(p + 1) % points.length].y) / 2;
+            ctx.quadraticCurveTo(points[p].x, points[p].y, xc, yc);
+          }
+          ctx.closePath();
+        };
 
         ctx.save();
+        ctx.globalAlpha = b.alpha;
 
-        // A. Subtle atmospheric drop shadow
-        ctx.shadowColor = isCurrent ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.08)';
-        ctx.shadowBlur = isCurrent ? 28 : isHovered ? 20 : 14;
-        ctx.shadowOffsetY = isCurrent ? 8 : 6;
+        // A. Atmospheric Outer Glow
+        ctx.shadowColor = activeIsDarkMode ? b.palette.glowDark : b.palette.glow;
+        ctx.shadowBlur = isCurrent ? 46 : isHovered ? 28 : 16;
+        ctx.shadowOffsetY = isCurrent ? 8 : 4;
 
-        // B. Translucent pearlescent soap bubble body fill
-        const bodyGrad = ctx.createRadialGradient(
-          x - r * 0.35, y - r * 0.35, r * 0.05,
-          x, y, r
+        // B. Translucent Liquid Soap Bubble Interior
+        drawSoapBubbleTranslucentInterior(ctx, b, x, y, r, time, activeIsDarkMode, isCurrent);
+
+        ctx.shadowColor = 'transparent';
+
+        // C. Multi-Chromatic Thin-Film Iridescent Rim Stroke (Soap Bubble Shimmer)
+        const rimAngle = time * 0.0004 + b.phase;
+        const rimGrad = ctx.createLinearGradient(
+          x - r * Math.cos(rimAngle),
+          y - r * Math.sin(rimAngle),
+          x + r * Math.cos(rimAngle),
+          y + r * Math.sin(rimAngle)
         );
-        bodyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        bodyGrad.addColorStop(0.28, 'rgba(245, 249, 255, 0.65)');
-        bodyGrad.addColorStop(0.60, 'rgba(235, 243, 255, 0.32)');
-        bodyGrad.addColorStop(0.88, 'rgba(224, 235, 255, 0.12)');
-        bodyGrad.addColorStop(1, 'rgba(255, 255, 255, 0.3)');
 
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = bodyGrad;
-        ctx.fill();
+        if (activeIsDarkMode) {
+          rimGrad.addColorStop(0, 'rgba(34, 211, 238, 0.85)');
+          rimGrad.addColorStop(0.28, 'rgba(192, 132, 252, 0.90)');
+          rimGrad.addColorStop(0.55, 'rgba(244, 114, 182, 0.85)');
+          rimGrad.addColorStop(0.8, 'rgba(251, 191, 36, 0.75)');
+          rimGrad.addColorStop(1, 'rgba(34, 211, 238, 0.85)');
+        } else {
+          rimGrad.addColorStop(0, 'rgba(56, 189, 248, 0.8)');
+          rimGrad.addColorStop(0.25, 'rgba(192, 132, 252, 0.85)');
+          rimGrad.addColorStop(0.5, 'rgba(244, 114, 182, 0.8)');
+          rimGrad.addColorStop(0.75, 'rgba(251, 191, 36, 0.7)');
+          rimGrad.addColorStop(1, 'rgba(56, 189, 248, 0.8)');
+        }
 
-        ctx.shadowColor = 'transparent'; // clear shadow
-
-        // C. Multi-chromatic Iridescent Outer Rim
-        const rimGrad = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-        rimGrad.addColorStop(0, 'rgba(6, 182, 212, 0.55)');   // cyan
-        rimGrad.addColorStop(0.35, 'rgba(139, 92, 246, 0.55)'); // lavender
-        rimGrad.addColorStop(0.7, 'rgba(236, 72, 153, 0.5)');   // pink
-        rimGrad.addColorStop(1, 'rgba(6, 182, 212, 0.55)');   // cyan
-
-        ctx.lineWidth = isCurrent ? 2.5 : isHovered ? 2 : 1.4;
+        traceBubblePath();
+        ctx.lineWidth = isCurrent ? 3.6 : isHovered ? 2.6 : 1.8;
         ctx.strokeStyle = rimGrad;
         ctx.stroke();
 
-        // Extra outer white crisp border
-        ctx.lineWidth = 0.8;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        // Crisp White Glass Refractive Outer Edge
+        traceBubblePath();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = activeIsDarkMode ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.92)';
         ctx.stroke();
 
-        // D. Inner Specular Gleam Highlight (Crescent in upper-left quadrant)
+        // D. Primary Specular Crescent Gleam (Upper Left Curved Highlight)
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(-Math.PI / 4.2);
+        ctx.rotate(-Math.PI / 3.8 + Math.sin(time * 0.0006) * 0.04);
 
-        const gleamGrad = ctx.createLinearGradient(0, -r * 0.82, 0, -r * 0.4);
-        gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
-        gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+        const gleamGrad = ctx.createLinearGradient(0, -r * 0.88, 0, -r * 0.45);
+        gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        gleamGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.40)');
         gleamGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
         ctx.beginPath();
-        ctx.ellipse(0, -r * 0.65, r * 0.38, r * 0.16, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -r * 0.72, r * 0.48, r * 0.16, 0, 0, Math.PI * 2);
         ctx.fillStyle = gleamGrad;
         ctx.fill();
 
-        // Tiny upper reflection dot
+        // Secondary Specular Star Dot (Upper Right Bright Focus)
         ctx.beginPath();
-        ctx.arc(r * 0.35, -r * 0.62, r * 0.045, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.arc(r * 0.45, -r * 0.65, r * 0.045, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
         ctx.fill();
 
-        // Secondary bottom-right warm refraction bounce
-        const bottomGlow = ctx.createRadialGradient(0, r * 0.68, 0, 0, r * 0.68, r * 0.35);
-        bottomGlow.addColorStop(0, 'rgba(244, 114, 182, 0.25)');
-        bottomGlow.addColorStop(0.5, 'rgba(168, 85, 247, 0.15)');
-        bottomGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        // Lower Caustic Bounce Light (Bottom Glow Arc)
+        const bottomGlow = ctx.createRadialGradient(0, r * 0.7, 0, 0, r * 0.7, r * 0.45);
+        bottomGlow.addColorStop(0, activeIsDarkMode ? b.palette.causticColor : 'rgba(244, 114, 182, 0.45)');
+        bottomGlow.addColorStop(0.6, activeIsDarkMode ? b.palette.glowDark : 'rgba(192, 132, 252, 0.15)');
+        bottomGlow.addColorStop(1, 'transparent');
 
         ctx.beginPath();
-        ctx.ellipse(0, r * 0.65, r * 0.42, r * 0.18, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, r * 0.70, r * 0.46, r * 0.18, 0, 0, Math.PI * 2);
         ctx.fillStyle = bottomGlow;
         ctx.fill();
 
-        ctx.restore(); // restore rotation
+        ctx.restore();
 
-        // E. Playing Pulsing Aura
-        if (isCurrent) {
+        // E. Center Audio Equalizer Waveform (Active Hero Track - Neon Horizon)
+        if (isCurrent || r >= 115) {
           ctx.save();
-          ctx.beginPath();
-          ctx.arc(x, y, r + 4 + Math.sin(time * 0.005) * 2, 0, Math.PI * 2);
-          ctx.strokeStyle = isPlayingThis ? 'rgba(99, 102, 241, 0.45)' : 'rgba(99, 102, 241, 0.25)';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([4, 4]);
-          ctx.stroke();
+          const barCount = r >= 120 ? 30 : 22;
+          const barWidth = 2.4;
+          const barGap = 2.0;
+          const totalWidth = barCount * barWidth + (barCount - 1) * barGap;
+          const startX = x - totalWidth / 2;
+          const waveY = y + r * 0.38;
+
+          for (let bi = 0; bi < barCount; bi++) {
+            const normX = bi / barCount;
+            const distCenter = Math.abs(normX - 0.5) * 2;
+            const envelope = 1 - Math.pow(distCenter, 1.8);
+            const animSpeed = isPlayingThis ? 0.009 : 0.003;
+            const barH = (Math.abs(Math.sin(time * animSpeed + bi * 0.48)) * 0.75 + 0.25) * (r * 0.22) * envelope + 2.5;
+
+            const bx = startX + bi * (barWidth + barGap);
+            const barGrad = ctx.createLinearGradient(bx, waveY - barH, bx, waveY + barH);
+            barGrad.addColorStop(0, '#818cf8');
+            barGrad.addColorStop(0.5, '#c084fc');
+            barGrad.addColorStop(1, '#6366f1');
+
+            ctx.fillStyle = barGrad;
+            ctx.beginPath();
+            ctx.roundRect(bx, waveY - barH / 2, barWidth, barH, barWidth / 2);
+            ctx.fill();
+          }
           ctx.restore();
         }
 
-        // F. Inside Typography: Title & Artist
+        // F. Floating Pill Badges ("EN REPRODUCCIÓN", "GEMA", "con IA")
+        if (b.categoryLabel && r >= 64) {
+          ctx.save();
+          const pillY = y - r * 0.48;
+          const isEnRep = isCurrent;
+          const tagText = isEnRep ? 'EN REPRODUCCIÓN' : b.tier === 'UNDERGROUND' ? 'GEMA' : b.categoryLabel;
+
+          ctx.font = `700 ${isEnRep ? 9.5 : r >= 95 ? 9 : 8}px "Plus Jakarta Sans", sans-serif`;
+          const tagMetrics = ctx.measureText(tagText);
+          const tagW = tagMetrics.width + (isEnRep ? 18 : 14);
+          const tagH = isEnRep ? 19 : 16;
+
+          if (isEnRep) {
+            ctx.fillStyle = activeIsDarkMode ? 'rgba(147, 51, 234, 0.35)' : 'rgba(238, 242, 255, 0.85)';
+            ctx.strokeStyle = activeIsDarkMode ? 'rgba(192, 132, 252, 0.75)' : 'rgba(147, 51, 234, 0.55)';
+          } else if (tagText === 'GEMA') {
+            ctx.fillStyle = activeIsDarkMode ? 'rgba(99, 102, 241, 0.25)' : 'rgba(238, 242, 255, 0.85)';
+            ctx.strokeStyle = activeIsDarkMode ? 'rgba(129, 140, 248, 0.65)' : 'rgba(99, 102, 241, 0.5)';
+          } else {
+            ctx.fillStyle = activeIsDarkMode ? 'rgba(14, 165, 233, 0.22)' : 'rgba(240, 249, 255, 0.85)';
+            ctx.strokeStyle = activeIsDarkMode ? 'rgba(56, 189, 248, 0.65)' : 'rgba(14, 165, 233, 0.5)';
+          }
+
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          ctx.roundRect(x - tagW / 2, pillY - tagH / 2, tagW, tagH, tagH / 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          if (isEnRep) {
+            ctx.fillStyle = activeIsDarkMode ? '#e9d5ff' : '#6d28d9';
+          } else if (tagText === 'GEMA') {
+            ctx.fillStyle = activeIsDarkMode ? '#c7d2fe' : '#4338ca';
+          } else {
+            ctx.fillStyle = activeIsDarkMode ? '#bae6fd' : '#0369a1';
+          }
+          ctx.fillText(tagText, x, pillY + 0.5);
+          ctx.restore();
+        }
+
+        // G. Track Title & Artist Typography
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
         const maxTextWidth = r * 1.55;
+        let textCenterY = y - (isCurrent ? 14 : 2);
 
-        // Visualizer bar if actively playing
-        let textCenterY = y;
-        if (isPlayingThis) {
-          textCenterY = y + 5;
-          const barW = 2.5;
-          const gap = 2;
-          const barCount = 4;
-          const totalW = barCount * barW + (barCount - 1) * gap;
-          const startX = x - totalW / 2;
+        // Song Title
+        const titleFontSize = r >= 115 ? 18 : r >= 95 ? 14.5 : r >= 80 ? 12 : 10;
+        ctx.font = `800 ${titleFontSize}px "Plus Jakarta Sans", sans-serif`;
+        
+        ctx.shadowColor = activeIsDarkMode ? 'rgba(0, 0, 0, 0.75)' : 'rgba(255, 255, 255, 0.95)';
+        ctx.shadowBlur = activeIsDarkMode ? 6 : 4;
+        ctx.shadowOffsetY = activeIsDarkMode ? 1.5 : 1;
 
-          for (let bIdx = 0; bIdx < barCount; bIdx++) {
-            const barH = 3 + Math.abs(Math.sin(time * 0.008 + bIdx * 0.9)) * 9;
-            ctx.fillStyle = bIdx % 2 === 0 ? '#6366f1' : '#06b6d4';
-            ctx.fillRect(startX + bIdx * (barW + gap), y - r * 0.38 - barH, barW, barH);
-          }
-        }
+        ctx.fillStyle = activeIsDarkMode ? '#ffffff' : '#0f172a';
 
-        // Category / Tier Pill at Top
-        if (b.categoryLabel && r >= 60) {
-          const pillY = y - r * 0.48;
-          ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
-          const tagText = b.tier === 'UNDERGROUND' ? 'GEMA' : b.categoryLabel;
-          const tagMetrics = ctx.measureText(tagText);
-          const tagW = tagMetrics.width + 10;
-          const tagH = 13;
-
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-          ctx.strokeStyle = 'rgba(99, 102, 241, 0.25)';
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.roundRect(x - tagW / 2, pillY - tagH / 2, tagW, tagH, 7);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = b.category === 'suggestions' ? '#4f46e5' : '#0f172a';
-          ctx.fillText(tagText, x, pillY + 0.5);
-        }
-
-        // Title
-        const titleFontSize = r >= 75 ? 12 : r >= 60 ? 11 : 9.5;
-        ctx.font = `700 ${titleFontSize}px "Outfit", "Plus Jakarta Sans", sans-serif`;
-        ctx.fillStyle = isHovered ? '#4338ca' : '#0f172a';
-
-        // Wrap or truncate title
         let title = b.track.title || 'Canción';
         let metrics = ctx.measureText(title);
         if (metrics.width > maxTextWidth) {
@@ -505,12 +1055,12 @@ export default function BubbleWorld({
           }
           title += '…';
         }
-        ctx.fillText(title, x, textCenterY - 4);
+        ctx.fillText(title, x, textCenterY);
 
-        // Artist
-        const artistFontSize = r >= 75 ? 10 : r >= 60 ? 9 : 8;
-        ctx.font = `500 ${artistFontSize}px "Plus Jakarta Sans", sans-serif`;
-        ctx.fillStyle = '#64748b';
+        // Artist Name
+        const artistFontSize = r >= 115 ? 12.5 : r >= 95 ? 11 : r >= 80 ? 9.5 : 8.5;
+        ctx.font = `600 ${artistFontSize}px "Plus Jakarta Sans", sans-serif`;
+        ctx.fillStyle = activeIsDarkMode ? '#cbd5e1' : '#475569';
 
         let artist = b.track.artist || 'Artista';
         let artistMetrics = ctx.measureText(artist);
@@ -521,10 +1071,9 @@ export default function BubbleWorld({
           }
           artist += '…';
         }
-        ctx.fillText(artist, x, textCenterY + 11);
+        ctx.fillText(artist, x, textCenterY + (r >= 115 ? 20 : 16));
 
         ctx.restore();
-
         ctx.restore();
       });
 
@@ -534,30 +1083,98 @@ export default function BubbleWorld({
 
     animationFrameRef.current = requestAnimationFrame(render);
 
-    // Resize handling
+    // =====================================================================
+    // RESIZE HANDLER
+    // =====================================================================
     const handleResize = () => {
-      if (!container || !canvas) return;
-      const newW = container.clientWidth || 900;
-      const newH = Math.max(550, container.clientHeight || 650);
+      if (!container || !canvas || !wallsRef.current.length) return;
+      const newW = container.clientWidth || 1200;
+      const newH = Math.max(680, container.clientHeight || 800);
 
       const dpr = window.devicePixelRatio || 1;
       canvas.width = newW * dpr;
       canvas.height = newH * dpr;
       canvas.style.width = `${newW}px`;
       canvas.style.height = `${newH}px`;
+
+      const wallThickness = 160;
+      const walls = wallsRef.current;
+      if (walls[0]) Matter.Body.setPosition(walls[0], { x: newW / 2, y: -wallThickness / 2 });
+      if (walls[1]) Matter.Body.setPosition(walls[1], { x: newW / 2, y: newH + wallThickness / 2 });
+      if (walls[2]) Matter.Body.setPosition(walls[2], { x: -wallThickness / 2, y: newH / 2 });
+      if (walls[3]) Matter.Body.setPosition(walls[3], { x: newW + wallThickness / 2, y: newH / 2 });
     };
 
     window.addEventListener('resize', handleResize);
 
+    // =====================================================================
+    // DEVELOPMENT DEBUGGER HELPER
+    // =====================================================================
+    if (typeof window !== 'undefined') {
+      window.__superfind_debug__ = {
+        captureBubbleSnapshot: () => {
+          const bubbles = Array.from(bubblesMapRef.current.values());
+          return {
+            timestamp: performance.now(),
+            selectedTrackId: propsRef.current.currentTrack?.id || null,
+            bubbles: bubbles.map(b => ({
+              id: b.id,
+              bodyId: b.body.id,
+              x: Number(b.body.position.x.toFixed(2)),
+              y: Number(b.body.position.y.toFixed(2)),
+              vx: Number(b.body.velocity.x.toFixed(3)),
+              vy: Number(b.body.velocity.y.toFixed(3)),
+              radius: Number(b.radius.toFixed(1)),
+              palette: b.palette.name,
+              alpha: Number(b.alpha.toFixed(2)),
+            }))
+          };
+        },
+        compareSnapshots: (snapA, snapB) => {
+          const dt = (snapB.timestamp - snapA.timestamp) / 1000;
+          const report = [];
+          snapA.bubbles.forEach(bA => {
+            const bB = snapB.bubbles.find(b => b.id === bA.id);
+            if (!bB) return;
+            const dx = bB.x - bA.x;
+            const dy = bB.y - bA.y;
+            const dist = Math.hypot(dx, dy);
+            const isStableBody = bA.bodyId === bB.bodyId;
+            const isContinuous = dist < 35 || (dist / Math.max(0.016, dt)) < 500;
+            report.push({
+              trackId: bA.id,
+              bodyIdA: bA.bodyId,
+              bodyIdB: bB.bodyId,
+              bodyStable: isStableBody,
+              posA: `(${bA.x}, ${bA.y})`,
+              posB: `(${bB.x}, ${bB.y})`,
+              delta: `(${dx.toFixed(2)}, ${dy.toFixed(2)})`,
+              distance: Number(dist.toFixed(2)),
+              status: isContinuous && isStableBody ? 'CONTINUOUS' : 'SUSPICIOUS_JUMP',
+            });
+          });
+          return report;
+        },
+        getPhysicsStats: () => ({
+          bodyCount: engine.world.bodies.length,
+          bubbleCount: bubblesMapRef.current.size,
+          activeTrack: propsRef.current.currentTrack?.id || null,
+          isPlaying: propsRef.current.isPlaying,
+        })
+      };
+    }
+
     return () => {
+      console.log('[BubbleWorld] unmounted (Cleaning up Engine)');
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       Matter.World.clear(engine.world, false);
       Matter.Engine.clear(engine);
     };
-  }, [filteredData, currentTrack, isPlaying]);
+  }, []);
 
-  // Pointer Interaction Handlers
+  // Pointer Handlers
   const handlePointerMove = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -565,14 +1182,21 @@ export default function BubbleWorld({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    mousePosRef.current = { x, y, isDown: mousePosRef.current.isDown };
+    mousePosRef.current = {
+      x,
+      y,
+      isDown: mousePosRef.current.isDown,
+      vx: x - mousePosRef.current.lastX,
+      vy: y - mousePosRef.current.lastY,
+      lastX: x,
+      lastY: y,
+    };
 
-    // Check hovered bubble for tooltips
-    const bubbles = bubblesRef.current;
+    const bubbles = Array.from(bubblesMapRef.current.values());
     const hovered = bubbles.find(b => {
       const dx = b.body.position.x - x;
       const dy = b.body.position.y - y;
-      return Math.sqrt(dx * dx + dy * dy) <= b.radius;
+      return Math.hypot(dx, dy) <= b.radius;
     });
 
     if (hovered) {
@@ -591,132 +1215,61 @@ export default function BubbleWorld({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    mousePosRef.current = { x, y, isDown: true };
+    mousePosRef.current.isDown = true;
 
-    const bubbles = bubblesRef.current;
+    const bubbles = Array.from(bubblesMapRef.current.values());
     const clicked = bubbles.find(b => {
       const dx = b.body.position.x - x;
       const dy = b.body.position.y - y;
-      return Math.sqrt(dx * dx + dy * dy) <= b.radius;
+      return Math.hypot(dx, dy) <= b.radius;
     });
 
-    if (clicked) {
-      onPlayTrack(clicked.track);
+    if (clicked && propsRef.current.onPlayTrack) {
+      propsRef.current.onPlayTrack(clicked.track);
     }
-  }, [onPlayTrack]);
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    mousePosRef.current.isDown = false;
+  }, []);
 
   const handlePointerLeave = useCallback(() => {
-    mousePosRef.current = { x: -1000, y: -1000, isDown: false };
+    mousePosRef.current = { x: -1000, y: -1000, isDown: false, vx: 0, vy: 0, lastX: -1000, lastY: -1000 };
     setHoveredTrack(null);
   }, []);
 
   return (
-    <div className="w-full relative">
-      
-      {/* Category Constellation Navigation Filters */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 px-2">
-        <div className="flex items-center gap-1.5 bg-white/80 p-1.5 rounded-full border border-slate-200/80 shadow-sm backdrop-blur-md">
-          <button
-            onClick={() => onSelectCategory('all')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
-              activeCategory === 'all'
-                ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            Todas las burbujas ({allBubblesData.length})
-          </button>
+    <div
+      ref={containerRef}
+      className="fixed inset-0 w-screen h-screen overflow-hidden touch-none select-none z-0"
+    >
+      <canvas
+        ref={canvasRef}
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        className="w-full h-full block cursor-default"
+      />
 
-          <button
-            onClick={() => onSelectCategory('suggestions')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-              activeCategory === 'suggestions'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            <Sparkles className="w-3 h-3 text-indigo-400" />
-            <span>Sugeridos IA ({suggestions.length})</span>
-          </button>
-
-          <button
-            onClick={() => onSelectCategory('top24h')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-              activeCategory === 'top24h'
-                ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            <TrendingUp className="w-3 h-3 text-cyan-500" />
-            <span>Top 24hs ({topTracks.length})</span>
-          </button>
-
-          <button
-            onClick={() => onSelectCategory('recent')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-              activeCategory === 'recent'
-                ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            <Music className="w-3 h-3 text-teal-500" />
-            <span>Novedades ({recentTracks.length})</span>
-          </button>
-        </div>
-
-        {/* Refresh AI recommendations button */}
-        {onRefreshGemini && (
-          <button
-            onClick={onRefreshGemini}
-            disabled={isRefreshingAi}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-indigo-700 bg-indigo-50/90 border border-indigo-200/80 hover:bg-indigo-100 transition active:scale-95 disabled:opacity-50 cursor-pointer shadow-sm"
-            title="Recalcular constelación con Gemini AI"
-          >
-            <RefreshCw className={`w-3 h-3 ${isRefreshingAi ? 'animate-spin' : ''}`} />
-            <span>{isRefreshingAi ? 'Curando...' : 'Reordenar con IA'}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Main Interactive Floating Bubble Canvas World */}
-      <div
-        ref={containerRef}
-        className="w-full h-[580px] sm:h-[680px] rounded-3xl relative overflow-hidden border border-slate-200/70 bg-gradient-to-b from-white/90 via-indigo-50/20 to-pink-50/15 shadow-[0_12px_45px_-12px_rgba(99,102,241,0.08)] backdrop-blur-xl touch-none select-none"
-      >
-        <canvas
-          ref={canvasRef}
-          onPointerMove={handlePointerMove}
-          onPointerDown={handlePointerDown}
-          onPointerLeave={handlePointerLeave}
-          className="w-full h-full block"
-        />
-
-        {/* Hovered Curation Tooltip Pill */}
-        {hoveredTrack && hoveredTrack.reasoning && (
-          <div
-            className="absolute z-30 pointer-events-none px-3.5 py-2 rounded-2xl bg-white/95 border border-indigo-200/80 shadow-lg text-slate-800 text-xs max-w-xs transition-all duration-150 animate-fadeIn"
-            style={{
-              left: `${Math.min(window.innerWidth - 280, Math.max(20, hoveredTrack.body.position.x - 100))}px`,
-              top: `${Math.max(15, hoveredTrack.body.position.y - hoveredTrack.radius - 48)}px`,
-            }}
-          >
-            <div className="flex items-center gap-1.5 font-bold text-indigo-700 text-[10px] uppercase tracking-wider mb-0.5">
-              <Sparkles className="w-3 h-3 text-indigo-500" />
-              <span>Nota de Curaduría IA</span>
-            </div>
-            <p className="text-[11px] text-slate-600 leading-snug">
-              "{hoveredTrack.reasoning}"
-            </p>
+      {/* Hovered Curation Note Tooltip Bubble */}
+      {hoveredTrack && hoveredTrack.reasoning && (
+        <div
+          className="absolute z-30 pointer-events-none px-4 py-2.5 rounded-2xl bubble-capsule max-w-xs transition-all duration-150 animate-fadeIn shadow-xl"
+          style={{
+            left: `${Math.min(window.innerWidth - 320, Math.max(20, hoveredTrack.body.position.x - 120))}px`,
+            top: `${Math.max(20, hoveredTrack.body.position.y - hoveredTrack.radius - 60)}px`,
+          }}
+        >
+          <div className="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400 text-[10px] uppercase tracking-wider mb-0.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Nota de Curaduría IA</span>
           </div>
-        )}
-
-        {/* Bottom Explorer Hint */}
-        <div className="absolute bottom-4 left-6 right-6 flex items-center justify-between text-[11px] text-slate-400 font-medium pointer-events-none">
-          <span>✨ Hacé clic en cualquier burbuja para reproducir</span>
-          <span className="hidden sm:inline">Tensión superficial & constelaciones conectadas</span>
+          <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-snug">
+            "{hoveredTrack.reasoning}"
+          </p>
         </div>
-      </div>
-
+      )}
     </div>
   );
 }

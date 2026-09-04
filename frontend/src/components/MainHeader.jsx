@@ -1,131 +1,207 @@
 import React, { useState } from 'react';
-import { Search, SlidersHorizontal, X, Compass, Heart, Radio, Sparkles } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Radio, Compass, Heart, Moon, Sun, Sparkles, TrendingUp, Music } from 'lucide-react';
 
+/**
+ * MainHeader - Floating Top Overlay with Soap Bubble Capsules
+ * 
+ * Features:
+ * - Floating top overlay with zero viewport obstruction.
+ * - Title capsule: "Descubrí música nueva. Sin derechos, sin límites."
+ * - Elongated translucent search bubble + circular filter button.
+ * - Floating category constellation pills matching reference 2.
+ */
 export default function MainHeader({
   searchQuery = '',
   onSearchChange,
   selectedGenre = 'all',
   onSelectGenre,
-  availableGenres = [],
+  activeCategory = 'all',
+  onSelectCategory,
+  onRefreshGemini,
+  isRefreshingAi = false,
   activeTab = 'discover',
   onSelectTab,
-  likedCount = 0
+  likedCount = 0,
+  isDarkMode = true,
+  onToggleTheme
 }) {
   const [showFilters, setShowFilters] = useState(false);
 
   const filterPresets = [
     { id: 'all', label: 'Todos los géneros' },
-    { id: 'indie', label: 'Indie' },
-    { id: 'electronic', label: 'Electrónica' },
+    { id: 'electronic', label: 'Electrónica / Synthwave' },
     { id: 'ambient', label: 'Ambient / Lo-Fi' },
-    { id: 'cinematic', label: 'Cinematic' },
-    { id: 'rock', label: 'Rock' },
-    { id: 'pop', label: 'Pop' },
+    { id: 'cinematic', label: 'Cinematic / Space' },
+    { id: 'acoustic', label: 'Acoustic / Sunset' },
+    { id: 'indie', label: 'Indie / Dreampop' },
   ];
 
   return (
-    <header className="mb-10 sm:mb-14 space-y-6 sm:space-y-8">
+    <header className="fixed top-4 sm:top-6 left-3 sm:left-5 lg:left-64 right-3 sm:right-6 z-20 pointer-events-none flex flex-col gap-3.5 transition-all duration-300">
       
-      {/* Mobile Top Navbar (visible on mobile only) */}
-      <div className="flex md:hidden items-center justify-between py-2 border-b border-slate-200/60 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full soap-bubble flex items-center justify-center">
-            <Radio className="w-4 h-4 text-indigo-600" />
-            <div className="bubble-gleam" />
-          </div>
-          <span className="font-extrabold text-lg tracking-tight text-slate-900 font-display">
-            SuperFind
-          </span>
+      {/* Top Floating Row: Title Capsule & Search Bubble */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        
+        {/* Left: Headline Bubble Capsule */}
+        <div className="bubble-capsule-asymmetric px-6 py-2.5 sm:px-7 sm:py-3 pointer-events-auto shadow-lg flex flex-col justify-center max-w-sm">
+          <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-[var(--text-primary)] font-display leading-tight">
+            Descubrí música nueva.
+          </h1>
+          <h2 className="text-xs sm:text-sm font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-500 font-display leading-tight">
+            Sin derechos, sin límites.
+          </h2>
+          <div className="bubble-gleam !left-[8%] !w-[24%] !top-[12%]" />
         </div>
 
-        {/* Mobile Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-full border border-slate-200/70">
-          <button
-            onClick={() => onSelectTab('discover')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-              activeTab === 'discover'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600'
-            }`}
-          >
-            Descubrir
-          </button>
-          <button
-            onClick={() => onSelectTab('liked')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition flex items-center gap-1 ${
-              activeTab === 'liked'
-                ? 'bg-white text-pink-700 shadow-sm'
-                : 'text-slate-600'
-            }`}
-          >
-            <span>Me gusta</span>
-            {likedCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-pink-100 text-[10px] flex items-center justify-center font-bold">
-                {likedCount}
-              </span>
+        {/* Right: Elongated Stretched Search Bubble + Circular Filter Bubble */}
+        <div className="flex items-center gap-2.5 pointer-events-auto flex-1 max-w-lg min-w-[280px]">
+          <div className="relative flex-1 bubble-stretched flex items-center px-4 py-2 sm:py-2.5 shadow-lg">
+            <Search className="w-4 h-4 text-violet-400 dark:text-violet-300 mr-2.5 flex-shrink-0 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Buscar música, artistas, géneros..."
+              className="w-full bg-transparent text-xs sm:text-sm text-[var(--text-primary)] placeholder-slate-400 dark:placeholder-slate-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
+            <div className="bubble-gleam !left-[6%] !w-[22%] !top-[14%]" />
+          </div>
+
+          {/* Floating Round Filter Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full bubble-surface flex items-center justify-center shadow-lg transition cursor-pointer flex-shrink-0 ${
+              showFilters || selectedGenre !== 'all'
+                ? 'ring-2 ring-violet-400 text-violet-500 dark:text-violet-300 shadow-violet-500/20'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Filtrar por género"
+            aria-label="Filtros de género"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <div className="bubble-gleam" />
           </button>
         </div>
+
       </div>
 
-      {/* Editorial Headline */}
-      <div className="space-y-1.5 pt-2">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 font-display leading-tight">
-          Descubrí música nueva.
-        </h1>
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 font-display leading-tight">
-          Sin derechos, sin límites.
-        </h2>
-      </div>
+      {/* Second Floating Row: Filter Category Pills & AI Reorder */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5 pointer-events-none">
+        
+        {/* Category Pills matching Reference 2 with Heterogeneous Sizes and Organic Shapes */}
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
+          {/* Decorative Floating Pearlescent Micro-Bubbles Left */}
+          <div className="hidden sm:flex items-center gap-1.5 pointer-events-none mr-1">
+            <div className="w-3 h-3 rounded-full bubble-surface-orb shadow-sm animate-float-slow" />
+            <div className="w-2 h-2 rounded-full bubble-surface-orb shadow-sm animate-float-delayed" />
+          </div>
 
-      {/* Search & Filter Bar */}
-      <div className="flex items-center gap-3 max-w-2xl">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar música, artistas, géneros..."
-            className="w-full pl-11 pr-10 py-3.5 rounded-full bg-white/85 border border-slate-200/90 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 focus:border-indigo-300 shadow-[0_4px_20px_-4px_rgba(99,102,241,0.06)] transition"
-          />
-          {searchQuery && (
+          <button
+            onClick={() => onSelectCategory && onSelectCategory('all')}
+            className={`px-5 py-2.5 text-xs sm:text-[13px] xl:text-[13.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-1 ${
+              activeCategory === 'all'
+                ? 'bubble-capsule-chip-active shadow-md'
+                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 flex items-center gap-1">
+              Todas las burbujas <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(24)</span>
+            </span>
+            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
+          </button>
+
+          <button
+            onClick={() => onSelectCategory && onSelectCategory('suggestions')}
+            className={`px-5 py-2.5 text-xs sm:text-[13px] xl:text-[13.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-2 ${
+              activeCategory === 'suggestions'
+                ? 'bubble-capsule-chip-active shadow-md'
+                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-violet-600 dark:text-violet-300" />
+              <span>Sugeridos IA</span>
+              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
+            </span>
+            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
+          </button>
+
+          <button
+            onClick={() => onSelectCategory && onSelectCategory('top24h')}
+            className={`px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-3 ${
+              activeCategory === 'top24h'
+                ? 'bubble-capsule-chip-active shadow-md'
+                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-cyan-600 dark:text-cyan-400" />
+              <span>Top 24hs</span>
+              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
+            </span>
+            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
+          </button>
+
+          <button
+            onClick={() => onSelectCategory && onSelectCategory('recent')}
+            className={`px-5 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-1 ${
+              activeCategory === 'recent'
+                ? 'bubble-capsule-chip-active shadow-md'
+                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Music className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Novedades</span>
+              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
+            </span>
+            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
+          </button>
+        </div>
+
+        {/* AI Reorder Button & Satellite Pearls */}
+        <div className="flex items-center gap-2">
+          {onRefreshGemini && (
             <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition"
-              aria-label="Limpiar búsqueda"
+              onClick={onRefreshGemini}
+              disabled={isRefreshingAi}
+              className="pointer-events-auto bubble-capsule-chip bubble-organic-fluid-3 px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition active:scale-95 shadow-sm relative"
+              title="Recalcular constelación con Gemini AI"
             >
-              <X className="w-3.5 h-3.5" />
+              <Sparkles className={`w-3.5 h-3.5 text-violet-500 dark:text-violet-400 ${isRefreshingAi ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingAi ? 'Curando...' : 'Reordenar con IA'}</span>
+              <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
             </button>
           )}
-        </div>
 
-        {/* Compact Filter Button */}
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`p-3.5 rounded-full border transition cursor-pointer flex items-center justify-center ${
-            showFilters || selectedGenre !== 'all'
-              ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm'
-              : 'bg-white/85 border-slate-200/90 text-slate-600 hover:text-slate-900 hover:bg-white shadow-[0_4px_20px_-4px_rgba(99,102,241,0.06)]'
-          }`}
-          title="Filtrar por género"
-          aria-label="Filtros de género"
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-        </button>
+          {/* Decorative Floating Pearlescent Micro-Bubbles Right */}
+          <div className="hidden sm:flex items-center gap-1.5 pointer-events-none ml-1">
+            <div className="w-4 h-4 rounded-full bubble-surface-orb shadow-sm animate-float" />
+            <div className="w-2.5 h-2.5 rounded-full bubble-surface-orb shadow-sm animate-float-slow" />
+          </div>
+        </div>
       </div>
 
-      {/* Genre Filter Pills (Toggleable / Smooth) */}
+      {/* Floating Genre Dropdown if open */}
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-2 pt-1 animate-fadeIn">
+        <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-2xl bubble-capsule max-w-xl pointer-events-auto animate-fadeIn shadow-xl">
           {filterPresets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onSelectGenre(preset.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
                 selectedGenre === preset.id
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/20'
-                  : 'bg-white/80 text-slate-600 hover:text-slate-900 hover:bg-white border border-slate-200/70'
+                  ? 'bubble-pill-active shadow-sm'
+                  : 'bubble-pill text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {preset.label}

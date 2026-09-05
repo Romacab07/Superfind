@@ -14,6 +14,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - JAMENDO_CLIENT_ID=${JAMENDO_CLIENT_ID:-}
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80
+      - LOCAL_MUSIC_PATH=/app/local-music
+    volumes:
+      - "E:/Pendrive 2022/Musica/Cachengue y trapo/Trvup tranca:/app/local-music:ro"
     networks:
       - soundwave-net
 

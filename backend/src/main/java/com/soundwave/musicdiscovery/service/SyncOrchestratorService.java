@@ -70,7 +70,7 @@ public class SyncOrchestratorService {
         Optional<SyncStatus> lastStatusOpt = syncStatusRepository.findByProviderName(providerName);
         String previousLastExternalId = lastStatusOpt.map(SyncStatus::getLastExternalId).orElse(null);
 
-        List<ExternalTrackDto> fetchedTracks = provider.fetchLatestTracks(30);
+        List<ExternalTrackDto> fetchedTracks = provider.fetchLatestTracks(80);
         int addedCount = 0;
         String newestExternalId = previousLastExternalId;
 

@@ -1,19 +1,21 @@
 import React from 'react';
-import { Compass, Heart, Radio, ShieldCheck, RefreshCw, Moon, Sun } from 'lucide-react';
+import { Compass, Heart, Radio, ShieldCheck, RefreshCw, Moon, Sun, Sparkles, TrendingUp, Music, Info, Disc } from 'lucide-react';
 
 /**
  * Sidebar - Floating Organic Bubble Navigation Overlay
  * 
  * In Reference 2:
  * - Floating iridescent logo bubble orb at the top.
- * - Pill bubble navigation for "Descubrir" & "Me gusta".
+ * - Pill bubble navigation for categories: Descubrir, Top 24hs, Sugeridos IA, Novedades, Me gusta.
+ * - Dedicated "Ficha Canción & Artista" button generated from free music APIs.
  * - Translucent platform controls.
  * - Floating editorial bubble with heart at the bottom.
- * - Zero blockage of the discovery canvas.
  */
 export default function Sidebar({
   activeTab = 'discover',
   onSelectTab,
+  activeCategory = 'all',
+  onSelectCategory,
   likedCount = 0,
   onOpenSyncStatus,
   onManualSync,
@@ -22,6 +24,9 @@ export default function Sidebar({
   onToggleTheme,
   useThreeJs = true,
   onToggleRenderer,
+  currentTrack = null,
+  onOpenInfo = null,
+  dynamicSections = [],
 }) {
   return (
     <aside className="fixed top-3 sm:top-5 left-3 sm:left-5 bottom-28 z-20 pointer-events-none flex flex-col justify-between w-52 sm:w-56 hidden lg:flex transition-all duration-300">
@@ -47,48 +52,66 @@ export default function Sidebar({
         </div>
 
         {/* Floating Navigation Pill Bubbles with Organic Fluid Silhouettes */}
-        <nav className="space-y-2 pointer-events-auto">
-          <button
-            onClick={() => onSelectTab('discover')}
-            className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-all duration-300 cursor-pointer relative overflow-hidden bubble-organic-fluid-2 ${
-              activeTab === 'discover'
-                ? 'bubble-capsule-chip-active shadow-lg'
-                : 'bubble-capsule-chip text-slate-800 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Compass className={`w-3.5 h-3.5 ${activeTab === 'discover' ? 'text-white' : 'text-violet-500 dark:text-violet-300'}`} />
-              <span>Descubrir</span>
-            </div>
-            {activeTab === 'discover' && (
-              <span className="w-2 h-2 rounded-full bg-white shadow-sm animate-pulse" />
-            )}
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[28%] !h-[30%]" />
-          </button>
+        <nav className="space-y-1.5 pointer-events-auto">
+          {/* Dynamic Navigation Options */}
+          {dynamicSections && dynamicSections.map((section, idx) => {
+            let Icon = null;
+            if (section.icon === 'trending') Icon = TrendingUp;
+            else if (section.icon === 'all') Icon = Sparkles;
+            else if (section.icon === 'recent') Icon = Music;
+            else if (section.icon === 'heart') Icon = Heart;
+            else Icon = Radio;
 
-          <button
-            onClick={() => onSelectTab('liked')}
-            className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-all duration-300 cursor-pointer relative overflow-hidden bubble-organic-fluid-1 ${
-              activeTab === 'liked'
-                ? 'bubble-capsule-chip-active shadow-lg'
-                : 'bubble-capsule-chip text-slate-800 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Heart className={`w-3.5 h-3.5 ${activeTab === 'liked' ? 'text-white fill-white' : 'text-rose-500 dark:text-rose-400'}`} />
-              <span>Me gusta</span>
-            </div>
-            {likedCount > 0 && (
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm ${
-                activeTab === 'liked'
-                  ? 'bg-white text-violet-700'
-                  : 'bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300'
-              }`}>
-                {likedCount}
-              </span>
-            )}
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[28%] !h-[30%]" />
-          </button>
+            return (
+              <button
+                key={section.id}
+                onClick={() => {
+                  if (onSelectTab && section.id === 'liked') onSelectTab('liked');
+                  else if (onSelectTab) onSelectTab('discover');
+                  if (onSelectCategory) onSelectCategory(section.id);
+                }}
+                className={`w-full flex items-center justify-between px-3.5 py-2 text-xs font-bold transition-all duration-300 cursor-pointer relative overflow-hidden bubble-organic-fluid-${(idx % 3) + 1} ${
+                  activeCategory === section.id
+                    ? 'bubble-capsule-chip-active shadow-lg'
+                    : 'bubble-capsule-chip text-slate-800 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`w-3.5 h-3.5 ${activeCategory === section.id ? 'text-white' : 'text-violet-500 dark:text-violet-400'}`} />
+                  <span>{section.label}</span>
+                </div>
+                {section.id === 'liked' && likedCount > 0 ? (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm ${
+                    activeCategory === 'liked'
+                      ? 'bg-white text-violet-700'
+                      : 'bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300'
+                  }`}>
+                    {likedCount}
+                  </span>
+                ) : (
+                  activeCategory === section.id && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white shadow-sm animate-pulse" />
+                  )
+                )}
+                <div className="bubble-gleam !top-[6%] !left-[8%] !w-[28%] !h-[30%]" />
+              </button>
+            );
+          })}
+
+          {/* Dedicated Song & Artist Info Tab Button */}
+          {currentTrack && onOpenInfo && (
+            <button
+              onClick={() => onOpenInfo(currentTrack)}
+              className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-bold transition-all duration-300 cursor-pointer relative overflow-hidden bubble-capsule text-indigo-700 dark:text-indigo-300 hover:scale-[1.02] shadow-md border border-indigo-300/40 dark:border-indigo-700/40"
+              title={`Ver ficha completa de "${currentTrack.title}"`}
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Info className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                <span className="truncate">Ficha Canción & Artista</span>
+              </div>
+              <div className="bubble-gleam !top-[6%] !left-[8%] !w-[28%] !h-[30%]" />
+            </button>
+          )}
         </nav>
 
         {/* Theme Toggle Pill */}

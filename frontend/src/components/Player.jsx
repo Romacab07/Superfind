@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart, Shield, Sparkles, Shuffle, Repeat, ListMusic, Plus } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart, Shield, Sparkles, Shuffle, Repeat, ListMusic, Plus, Info, ExternalLink } from 'lucide-react';
 import { trackApi } from '../services/api';
 import { extractTrackPalette } from '../utils/paletteExtractor';
 
@@ -12,6 +12,7 @@ import { extractTrackPalette } from '../utils/paletteExtractor';
  * - Spherical controls: Spinning artwork bubble, glossy hero play/pause sphere, like bubble, volume pill.
  * - Liquid glowing timeline progress slider.
  * - Libre CC badge & floating plus bubble matching the reference.
+ * - Direct access to Track & Artist Info tab generated from free music APIs.
  */
 export default function Player({
   currentTrack,
@@ -21,7 +22,8 @@ export default function Player({
   onPrevTrack,
   onTrackPlayRecorded,
   isLiked = false,
-  onToggleLike
+  onToggleLike,
+  onOpenInfo,
 }) {
   const audioRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(84); // 1:24 default preview
@@ -147,9 +149,12 @@ export default function Player({
           {/* Left: Artwork Bubble, Track Info & Heart Like Bubble */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-[210px]">
             
-            {/* Artwork Bubble */}
-            <div
-              className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden flex-shrink-0 bubble-surface flex items-center justify-center p-0.5 shadow-md transition-transform duration-500 border border-violet-400/40"
+            {/* Artwork Bubble (Clickable for Track Info) */}
+            <button
+              onClick={() => onOpenInfo && onOpenInfo(currentTrack)}
+              className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden flex-shrink-0 bubble-surface flex items-center justify-center p-0.5 shadow-md transition-transform hover:scale-105 duration-300 border border-violet-400/40 cursor-pointer"
+              title="Ver ficha de canción y artista"
+              aria-label="Ver ficha de canción y artista"
             >
               <img
                 src={currentTrack.coverUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200'}
@@ -158,13 +163,18 @@ export default function Player({
                 style={{ animationDuration: '20s' }}
               />
               <div className="bubble-gleam !top-[8%] !left-[12%] !w-[35%]" />
-            </div>
+            </button>
 
-            <div className="min-w-0 flex-1">
-              <h4 className="text-xs sm:text-sm font-extrabold text-[var(--text-primary)] truncate font-display">
+            {/* Clickable Track Meta for Info Drawer */}
+            <div
+              onClick={() => onOpenInfo && onOpenInfo(currentTrack)}
+              className="min-w-0 flex-1 cursor-pointer group"
+              title="Click para ver ficha de la canción y artista"
+            >
+              <h4 className="text-xs sm:text-sm font-extrabold text-[var(--text-primary)] truncate font-display group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                 {currentTrack.title}
               </h4>
-              <p className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium truncate">
+              <p className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium truncate group-hover:text-violet-500/80 transition-colors">
                 {currentTrack.artist}
               </p>
             </div>
@@ -272,11 +282,15 @@ export default function Player({
           {/* Right: Libre CC Badge, Volume & Extra Floating Bubble Controls */}
           <div className="hidden sm:flex items-center justify-end gap-2.5 sm:w-[230px]">
             
-            {/* Libre CC Badge Pill */}
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/70 border border-emerald-400/50 px-3 py-1 rounded-full bubble-pill shadow-sm">
+            {/* Libre CC Badge Pill (Clickable for License & Free API terms) */}
+            <button
+              onClick={() => onOpenInfo && onOpenInfo(currentTrack, 'license')}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/70 border border-emerald-400/50 px-3 py-1 rounded-full bubble-pill shadow-sm hover:scale-105 transition cursor-pointer"
+              title="Ver licencia Creative Commons y API libre"
+            >
               <Shield className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               <span>Libre CC</span>
-            </div>
+            </button>
 
             {/* Volume Control Bubble Pill */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bubble-pill">

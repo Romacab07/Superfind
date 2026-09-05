@@ -5,7 +5,9 @@ import BubbleWorld from './components/BubbleWorld';
 import ThreeBubbleWorld from './components/ThreeBubbleWorld';
 import Player from './components/Player';
 import SyncStatusModal from './components/SyncStatusModal';
+import TrackInfoModal from './components/TrackInfoModal';
 import { trackApi, recommendationApi, operationsApi } from './services/api';
+import { buildDynamicCategories } from './utils/categoryManager';
 
 // Curated Creative Commons / Royalty-Free Reference Tracks with Audio Previews
 const FALLBACK_TRACKS = [
@@ -253,6 +255,9 @@ export default function App() {
 
   // Modals & operations
   const [isSyncStatusOpen, setIsSyncStatusOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [selectedInfoTrack, setSelectedInfoTrack] = useState(null);
+  const [infoModalInitialTab, setInfoModalInitialTab] = useState('info');
   const [providers, setProviders] = useState([]);
   const [syncStatuses, setSyncStatuses] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -273,8 +278,8 @@ export default function App() {
     try {
       setLoading(true);
       const [top, recent, gemini, provs, statuses] = await Promise.allSettled([
-        trackApi.getTop24h(12),
-        trackApi.getRecent(14),
+        trackApi.getTop24h(35),
+        trackApi.getRecent(50),
         recommendationApi.getGeminiSuggestions(8),
         operationsApi.getProviders(),
         operationsApi.getSyncStatus(),
@@ -427,6 +432,27 @@ export default function App() {
     }
   };
 
+  // Open Track & Artist Info Drawer / Modal
+  const handleOpenTrackInfo = useCallback((track, tab = 'info') => {
+    setSelectedInfoTrack(track || currentTrack);
+    setInfoModalInitialTab(tab || 'info');
+    setIsInfoModalOpen(true);
+  }, [currentTrack]);
+
+  // Compute live dynamic categories
+  const dynamicSections = useMemo(() => {
+    const allTracks = [
+      ...(suggestions || []).map(s => s?.track || s),
+      ...(topTracks || []),
+      ...(recentTracks || []),
+    ].filter(Boolean);
+    
+    // Dedup by id
+    const uniqueTracks = Array.from(new Map(allTracks.map(t => [t.id, t])).values());
+    
+    return buildDynamicCategories(uniqueTracks);
+  }, [suggestions, topTracks, recentTracks]);
+
   const isCurrentTrackLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
 
   return (
@@ -435,6 +461,7 @@ export default function App() {
       {/* LAYER 0: Fullscreen Living Discovery Canvas (Three.js 3D WebGL vs Canvas 2D) */}
       {useThreeJs ? (
         <ThreeBubbleWorld
+          dynamicSections={dynamicSections}
           suggestions={suggestions}
           topTracks={topTracks}
           recentTracks={recentTracks}
@@ -454,6 +481,7 @@ export default function App() {
         />
       ) : (
         <BubbleWorld
+          dynamicSections={dynamicSections}
           suggestions={suggestions}
           topTracks={topTracks}
           recentTracks={recentTracks}
@@ -475,12 +503,15 @@ export default function App() {
 
       {/* LAYER 1: Floating Navigation Sidebar Overlay */}
       <Sidebar
+        dynamicSections={dynamicSections}
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
           if (tab === 'liked') setActiveCategory('liked');
           else if (activeCategory === 'liked') setActiveCategory('all');
         }}
+        activeCategory={activeCategory}
+        onSelectCategory={setActiveCategory}
         likedCount={likedTrackIds.length}
         onOpenSyncStatus={() => setIsSyncStatusOpen(true)}
         onManualSync={handleManualSync}
@@ -489,10 +520,13 @@ export default function App() {
         onToggleTheme={toggleTheme}
         useThreeJs={useThreeJs}
         onToggleRenderer={toggleRenderer}
+        currentTrack={currentTrack}
+        onOpenInfo={handleOpenTrackInfo}
       />
 
       {/* LAYER 2: Floating Header & Filters Top Overlay */}
       <MainHeader
+        dynamicSections={dynamicSections}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         selectedGenre={selectedGenre}
@@ -504,6 +538,8 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         likedCount={likedTrackIds.length}
+        currentTrack={currentTrack}
+        onOpenInfo={handleOpenTrackInfo}
         isDarkMode={isDarkMode}
         onToggleTheme={toggleTheme}
       />
@@ -518,6 +554,7 @@ export default function App() {
         onTrackPlayRecorded={handleTrackPlayRecorded}
         isLiked={isCurrentTrackLiked}
         onToggleLike={handleToggleLike}
+        onOpenInfo={handleOpenTrackInfo}
       />
 
       {/* LAYER 4: Modals with Glass Bubble Aesthetics */}
@@ -528,6 +565,44 @@ export default function App() {
         syncStatuses={syncStatuses}
         onTriggerSync={handleManualSync}
         isSyncing={isSyncing}
+      />
+
+      <TrackInfoModal
+        isOpen={isInfoModalOpen}
+        onClose={() => setIsInfoModalOpen(false)}
+        track={selectedInfoTrack || currentTrack}
+        isPlaying={isPlaying && ((selectedInfoTrack?.id || currentTrack?.id) === currentTrack?.id)}
+        onTogglePlay={(t) => {
+          if (currentTrack?.id === t?.id) {
+            handleTogglePlay();
+          } else {
+            handlePlayTrack(t);
+          }
+        }}
+        isLiked={selectedInfoTrack ? likedTrackIds.includes(selectedInfoTrack.id) : isCurrentTrackLiked}
+        onToggleLike={handleToggleLike}
+        relatedTracks={useMemo(() => {
+          const activeId = selectedInfoTrack?.id || currentTrack?.id;
+          const allPool = [
+            ...(suggestions || []).map(s => s?.track || s),
+            ...(topTracks || []),
+            ...(recentTracks || []),
+          ].filter(Boolean);
+          const seen = new Set();
+          const unique = [];
+          for (const t of allPool) {
+            if (t?.id && t.id !== activeId && !seen.has(t.id)) {
+              seen.add(t.id);
+              unique.push(t);
+            }
+          }
+          return unique.slice(0, 6);
+        }, [suggestions, topTracks, recentTracks, selectedInfoTrack, currentTrack])}
+        onSelectTrack={(t) => {
+          handlePlayTrack(t);
+          setSelectedInfoTrack(t);
+        }}
+        initialTab={infoModalInitialTab}
       />
     </div>
   );

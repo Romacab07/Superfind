@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, SlidersHorizontal, X, Radio, Compass, Heart, Moon, Sun, Sparkles, TrendingUp, Music } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Radio, Compass, Heart, Moon, Sun, Sparkles, TrendingUp, Music, Info, Headphones } from 'lucide-react';
 
 /**
  * MainHeader - Floating Top Overlay with Soap Bubble Capsules
@@ -7,8 +7,9 @@ import { Search, SlidersHorizontal, X, Radio, Compass, Heart, Moon, Sun, Sparkle
  * Features:
  * - Floating top overlay with zero viewport obstruction.
  * - Title capsule: "Descubrí música nueva. Sin derechos, sin límites."
- * - Elongated translucent search bubble + circular filter button.
- * - Floating category constellation pills matching reference 2.
+ * - Elongated translucent search bubble + circular filter button with active badge.
+ * - Floating category constellation pills with live dynamic counts.
+ * - Quick Song & Artist Info pill generated from free music APIs.
  */
 export default function MainHeader({
   searchQuery = '',
@@ -23,7 +24,11 @@ export default function MainHeader({
   onSelectTab,
   likedCount = 0,
   isDarkMode = true,
-  onToggleTheme
+  onToggleTheme,
+  categoryCounts = {},
+  currentTrack = null,
+  onOpenInfo = null,
+  dynamicSections = [],
 }) {
   const [showFilters, setShowFilters] = useState(false);
 
@@ -105,76 +110,60 @@ export default function MainHeader({
             <div className="w-2 h-2 rounded-full bubble-surface-orb shadow-sm animate-float-delayed" />
           </div>
 
-          <button
-            onClick={() => onSelectCategory && onSelectCategory('all')}
-            className={`px-5 py-2.5 text-xs sm:text-[13px] xl:text-[13.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-1 ${
-              activeCategory === 'all'
-                ? 'bubble-capsule-chip-active shadow-md'
-                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-1">
-              Todas las burbujas <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(24)</span>
-            </span>
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
-          </button>
-
-          <button
-            onClick={() => onSelectCategory && onSelectCategory('suggestions')}
-            className={`px-5 py-2.5 text-xs sm:text-[13px] xl:text-[13.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-2 ${
-              activeCategory === 'suggestions'
-                ? 'bubble-capsule-chip-active shadow-md'
-                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-violet-600 dark:text-violet-300" />
-              <span>Sugeridos IA</span>
-              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
-            </span>
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
-          </button>
-
-          <button
-            onClick={() => onSelectCategory && onSelectCategory('top24h')}
-            className={`px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-3 ${
-              activeCategory === 'top24h'
-                ? 'bubble-capsule-chip-active shadow-md'
-                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-cyan-600 dark:text-cyan-400" />
-              <span>Top 24hs</span>
-              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
-            </span>
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
-          </button>
-
-          <button
-            onClick={() => onSelectCategory && onSelectCategory('recent')}
-            className={`px-5 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-1 ${
-              activeCategory === 'recent'
-                ? 'bubble-capsule-chip-active shadow-md'
-                : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Novedades</span>
-              <span className="text-[11px] xl:text-xs opacity-90 font-semibold">(8)</span>
-            </span>
-            <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
-          </button>
+          {dynamicSections && dynamicSections.map((section, idx) => {
+            let Icon = null;
+            if (section.icon === 'trending') Icon = TrendingUp;
+            else if (section.icon === 'all') Icon = Sparkles;
+            else if (section.icon === 'recent') Icon = Music;
+            else if (section.icon === 'heart') Icon = Heart;
+            else Icon = Radio;
+            
+            return (
+              <button
+                key={section.id}
+                onClick={() => {
+                  if (onSelectTab && section.id === 'liked') onSelectTab('liked');
+                  else if (onSelectTab) onSelectTab('discover');
+                  if (onSelectCategory) onSelectCategory(section.id);
+                }}
+                className={`px-3.5 sm:px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold transition-all cursor-pointer relative shadow-sm bubble-organic-fluid-${(idx % 3) + 1} ${
+                  activeCategory === section.id
+                    ? 'bubble-capsule-chip-active shadow-md'
+                    : 'bubble-capsule-chip text-slate-900 dark:text-slate-100 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Icon className={`w-3.5 h-3.5 xl:w-4 xl:h-4 ${activeCategory === section.id ? 'text-white' : 'text-violet-600 dark:text-violet-300'}`} />
+                  <span>{section.label}</span>
+                  {section.count !== undefined && (
+                    <span className="text-[11px] xl:text-xs opacity-90 font-semibold">({section.count})</span>
+                  )}
+                </span>
+                <div className={`bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]`} />
+              </button>
+            );
+          })}
         </div>
 
-        {/* AI Reorder Button & Satellite Pearls */}
-        <div className="flex items-center gap-2">
+        {/* AI Reorder Button, Quick Song Info & Satellite Pearls */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {currentTrack && onOpenInfo && (
+            <button
+              onClick={() => onOpenInfo(currentTrack)}
+              className="bubble-capsule-chip bubble-organic-fluid-1 px-3 sm:px-4 py-2 text-xs sm:text-[12px] font-bold text-slate-700 dark:text-slate-200 hover:text-violet-600 dark:hover:text-violet-400 flex items-center gap-1.5 cursor-pointer transition shadow-sm relative"
+              title={`Ver ficha completa de "${currentTrack.title}" por ${currentTrack.artist}`}
+            >
+              <Info className="w-3.5 h-3.5 text-violet-500" />
+              <span className="hidden md:inline">Ficha Canción</span>
+              <div className="bubble-gleam !top-[6%] !left-[8%] !w-[26%] !h-[30%]" />
+            </button>
+          )}
+
           {onRefreshGemini && (
             <button
               onClick={onRefreshGemini}
               disabled={isRefreshingAi}
-              className="pointer-events-auto bubble-capsule-chip bubble-organic-fluid-3 px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition active:scale-95 shadow-sm relative"
+              className="bubble-capsule-chip bubble-organic-fluid-3 px-3.5 sm:px-4 py-2 text-xs sm:text-[12px] xl:text-[12.5px] font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition active:scale-95 shadow-sm relative"
               title="Recalcular constelación con Gemini AI"
             >
               <Sparkles className={`w-3.5 h-3.5 text-violet-500 dark:text-violet-400 ${isRefreshingAi ? 'animate-spin' : ''}`} />

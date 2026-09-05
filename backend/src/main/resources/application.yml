@@ -63,6 +63,11 @@ music:
     generic-open:
       enabled: false
 
+# Local Pendrive Music Storage (Non-production / Test only)
+soundwave:
+  local-music:
+    path: ${LOCAL_MUSIC_PATH:/app/local-music}
+
 # CORS Configuration
 app:
   cors:

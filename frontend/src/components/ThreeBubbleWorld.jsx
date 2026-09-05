@@ -417,6 +417,7 @@ function extractTrackPalette(track) {
 }
 
 export default function ThreeBubbleWorld({
+  dynamicSections = [],
   suggestions = [],
   topTracks = [],
   recentTracks = [],
@@ -439,6 +440,8 @@ export default function ThreeBubbleWorld({
   const engineRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+  const cameraOffsetRef = useRef({ x: 0, y: 0 });
+  const waterMeshRef = useRef(null);
   const rendererRef = useRef(null);
   const bubblesMapRef = useRef(new Map());
   const imageCacheRef = useRef(new Map());
@@ -460,10 +463,12 @@ export default function ThreeBubbleWorld({
 
   // Synchronized prop references for the render loop
   const propsRef = useRef({
+    dynamicSections,
     currentTrack,
     isPlaying,
     isDarkMode,
     activeCategory,
+    onSelectCategory,
     searchQuery,
     selectedGenre,
     likedTrackIds,
@@ -474,10 +479,12 @@ export default function ThreeBubbleWorld({
 
   useEffect(() => {
     propsRef.current = {
+      dynamicSections,
       currentTrack,
       isPlaying,
       isDarkMode,
       activeCategory,
+      onSelectCategory,
       searchQuery,
       selectedGenre,
       likedTrackIds,
@@ -485,7 +492,7 @@ export default function ThreeBubbleWorld({
       onPlayTrack,
       onConsumeTrack,
     };
-  }, [currentTrack, isPlaying, isDarkMode, activeCategory, searchQuery, selectedGenre, likedTrackIds, consumedTrackIds, onPlayTrack, onConsumeTrack]);
+  }, [dynamicSections, currentTrack, isPlaying, isDarkMode, activeCategory, onSelectCategory, searchQuery, selectedGenre, likedTrackIds, consumedTrackIds, onPlayTrack, onConsumeTrack]);
 
   // Canonical constellation mapping matching reference_1_mapa.png & reference_2_musica.png
   const ANCHORS = useMemo(() => ({
@@ -520,76 +527,103 @@ export default function ThreeBubbleWorld({
     return keys[index % keys.length];
   }, [ANCHORS]);
 
-  // Aggregated catalog data with strict deduplication and canonical positioning
+  // Aggregated catalog data: Populates each dynamic section with its own galaxy of bubbles
   const allBubblesData = useMemo(() => {
-    const map = new Map();
-    const seenTitles = new Set();
-    let slotIdx = 0;
+    const list = [];
+    const poolMap = new Map();
 
-    const addTrack = (item, defaultCategory, defaultLabel, defaultRadius) => {
-      const t = item.track || item;
-      if (!t || !t.id) return;
-      if (consumedTrackIds && consumedTrackIds.has(t.id)) return; // Skip consumed tracks per Phase 2.12
-      const normalizedTitle = (t.title || '').toLowerCase().trim();
-
-      const existing = map.get(t.id) || (seenTitles.has(normalizedTitle) ? Array.from(map.values()).find(v => (v.track.title || '').toLowerCase().trim() === normalizedTitle) : null);
-      if (existing) {
-        existing.categories.add(defaultCategory);
-        if (defaultCategory === 'top24h') existing.categories.add('top24h');
-        return;
+    // 1. Gather all unique tracks into a catalog pool
+    (suggestions || []).forEach((item) => {
+      const t = item?.track || item;
+      if (t && t.id && !poolMap.has(t.id)) {
+        poolMap.set(t.id, { ...t, tier: item?.tier || t.tier || 'GROWING', reasoning: item?.reasoning || t.reasoning });
       }
-      seenTitles.add(normalizedTitle);
+    });
+    (topTracks || []).forEach((t) => {
+      if (t && t.id && !poolMap.has(t.id)) poolMap.set(t.id, t);
+    });
+    (recentTracks || []).forEach((t) => {
+      if (t && t.id && !poolMap.has(t.id)) poolMap.set(t.id, t);
+    });
 
-      const assignedKey = resolveAnchorKey(t, slotIdx);
-      let anchor = ANCHORS[assignedKey];
-      if (!anchor) {
-        // Procedural anchor distribution for dynamic catalog scalability per Phase 2.0 & 2.10
-        const phi = 137.5 * (Math.PI / 180);
-        const distFactor = Math.sqrt(slotIdx + 1) / 4.0;
-        const dist = 110 + distFactor * 160;
-        const angle = slotIdx * phi;
-        anchor = {
-          x: Math.max(0.18, Math.min(0.86, 0.52 + (Math.cos(angle) * dist) / 1200)),
-          y: Math.max(0.20, Math.min(0.80, 0.50 + (Math.sin(angle) * dist * 0.72) / 800)),
-          r: Math.max(75, defaultRadius || 95),
-          label: defaultLabel || 'con IA',
-        };
+    const allTracks = Array.from(poolMap.values());
+    if (allTracks.length === 0) return [];
+
+    const sections = (dynamicSections && dynamicSections.length > 0) ? dynamicSections : [
+      { id: 'top24h', label: 'Top 24hs' },
+      { id: 'all', label: 'Todas las burbujas' },
+      { id: 'recent', label: 'Novedades' },
+    ];
+
+    sections.forEach((sec, secIdx) => {
+      let sectionTracks = [];
+      if (sec.id === 'top24h') {
+        sectionTracks = [...allTracks].sort((a, b) => (b.playCount24h || 0) - (a.playCount24h || 0)).slice(0, 14);
+      } else if (sec.id === 'all') {
+        sectionTracks = allTracks.slice(0, 20);
+      } else if (sec.id === 'recent') {
+        sectionTracks = (recentTracks && recentTracks.length > 0 ? recentTracks : allTracks).slice(0, 14);
+      } else if (sec.id.startsWith('genre-')) {
+        const targetGenre = (sec.genre || sec.label || '').toLowerCase().trim();
+        sectionTracks = allTracks.filter((t) => {
+          const g = (t.genre || '').toLowerCase().trim();
+          return g.includes(targetGenre) || targetGenre.includes(g.split('/')[0].trim());
+        }).slice(0, 16);
+        if (sectionTracks.length === 0) {
+          sectionTracks = allTracks.slice(0, 12);
+        }
+      } else if (sec.id === 'liked') {
+        sectionTracks = allTracks.filter((t) => likedTrackIds && likedTrackIds.includes(t.id));
+        if (sectionTracks.length === 0) {
+          sectionTracks = allTracks.slice(0, 5);
+        }
+      } else {
+        sectionTracks = allTracks.slice(0, 12);
       }
-      slotIdx++;
 
-      const cats = new Set(['all', defaultCategory]);
-      if (t.category) cats.add(t.category);
-      if (defaultCategory === 'top24h' || (t.playCount24h && t.playCount24h > 50)) {
-        cats.add('top24h');
-      }
+      // Filter out consumed tracks so they don't block the screen
+      const availableTracks = sectionTracks.filter(t => !consumedTrackIds || !consumedTrackIds.has(t.id));
 
-      map.set(t.id, {
-        track: t,
-        category: defaultCategory,
-        categories: cats,
-        categoryLabel: anchor?.label || defaultLabel || (t.tier === 'UNDERGROUND' ? 'GEMA' : 'con IA'),
-        tier: item.tier || t.tier || 'GROWING',
-        reasoning: item.reasoning || t.reasoning,
-        baseRadius: anchor?.r || defaultRadius,
-        anchor: anchor || null,
-        assignedAnchorKey: assignedKey,
+      availableTracks.forEach((t, itemIdx) => {
+        let anchor;
+        if (itemIdx === 0) {
+          anchor = {
+            x: 0.51,
+            y: 0.49,
+            r: sec.id === 'top24h' ? 145 : 135,
+            label: sec.id === 'top24h' ? 'Top 1' : sec.label
+          };
+        } else {
+          const phi = itemIdx * 2.399963;
+          const dist = 115 + Math.sqrt(itemIdx) * 78;
+          anchor = {
+            x: Math.max(0.18, Math.min(0.84, 0.51 + (Math.cos(phi) * dist) / 1200)),
+            y: Math.max(0.20, Math.min(0.80, 0.50 + (Math.sin(phi) * dist * 0.70) / 800)),
+            r: Math.max(76, 118 - itemIdx * 2.8),
+            label: t.tier === 'UNDERGROUND' ? 'GEMA' : sec.id === 'top24h' ? 'Top 24h' : sec.id === 'recent' ? 'Novedad' : sec.label,
+          };
+        }
+
+        const uniqueKey = `${sec.id}__${t.id}`;
+        list.push({
+          track: t,
+          uniqueKey,
+          sectionId: sec.id,
+          sectionIndex: secIdx,
+          category: sec.id,
+          categories: new Set(['all', sec.id]),
+          categoryLabel: anchor.label,
+          tier: t.tier || 'GROWING',
+          reasoning: t.reasoning,
+          baseRadius: anchor.r,
+          anchor,
+          assignedAnchorKey: uniqueKey,
+        });
       });
-    };
-
-    suggestions.forEach((item, idx) => {
-      addTrack(item, 'suggestions', 'con IA', idx === 0 ? 185 : idx < 3 ? 126 : 106);
     });
 
-    topTracks.forEach((t, idx) => {
-      addTrack(t, 'top24h', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Top 24h', idx === 0 ? 132 : idx < 4 ? 116 : 96);
-    });
-
-    recentTracks.forEach((t, idx) => {
-      addTrack(t, 'recent', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Novedad', idx < 3 ? 110 : 90);
-    });
-
-    return Array.from(map.values());
-  }, [suggestions, topTracks, recentTracks, ANCHORS, resolveAnchorKey]);
+    return list;
+  }, [dynamicSections, suggestions, topTracks, recentTracks, likedTrackIds, consumedTrackIds]);
 
   // Helper: Draw authentic atmospheric landscape/cover art inside bubbles matching reference_1_mapa.png
   const drawAtmosphericLandscape = useCallback((ctx, key, center, radius, scale, isDark) => {
@@ -918,8 +952,12 @@ export default function ThreeBubbleWorld({
     const bubblesMap = bubblesMapRef.current;
     const activeKeys = new Set();
 
+    const sectionSpacingX = Math.max(width * 0.95, 1200);
+    const sectionSpacingY = Math.max(height * 0.90, 850);
+    const isMobile = width < 768;
+
     catalogData.forEach((data) => {
-      const uniqueKey = (data.track.title || '').toLowerCase().trim() || data.track.id;
+      const uniqueKey = data.uniqueKey || `${data.sectionId || 'all'}__${data.track.id}`;
       activeKeys.add(uniqueKey);
 
       const anchor = data.anchor || ANCHORS[data.track.id] || ANCHORS[data.assignedAnchorKey];
@@ -927,14 +965,15 @@ export default function ThreeBubbleWorld({
       const desktopScale = Math.min(1.42, Math.max(1.0, height / baseH));
       const responsiveScale = width < 500 ? 0.68 : width < 900 ? 0.82 : desktopScale;
       const radius = (anchor?.r || data.baseRadius) * responsiveScale;
+      const secIdx = data.sectionIndex ?? 0;
 
       if (!bubblesMap.has(uniqueKey)) {
-        let seedX = width * (anchor ? anchor.x : 0.53);
-        let seedY = height * (anchor ? anchor.y : 0.50);
+        let seedX = width * (anchor ? anchor.x : 0.53) + (isMobile ? 0 : secIdx * sectionSpacingX);
+        let seedY = height * (anchor ? anchor.y : 0.50) + (isMobile ? secIdx * sectionSpacingY : 0);
 
         const padding = radius + 20;
-        seedX = Math.max(padding, Math.min(width - padding, seedX));
-        seedY = Math.max(padding, Math.min(height - padding, seedY));
+        seedX = Math.max(padding, seedX);
+        seedY = Math.max(padding, seedY);
 
         // Matter.js elastic 2D physics body
         const body = Matter.Bodies.circle(seedX, seedY, radius, {
@@ -994,6 +1033,8 @@ export default function ThreeBubbleWorld({
         bubblesMap.set(uniqueKey, {
           id: data.track.id,
           key: uniqueKey,
+          sectionId: data.sectionId,
+          sectionIndex: secIdx,
           body,
           bodyId: body.id,
           mesh: bubbleMesh,
@@ -1025,6 +1066,8 @@ export default function ThreeBubbleWorld({
           scene.add(existing.mesh);
         }
         existing.id = data.track.id;
+        existing.sectionId = data.sectionId;
+        existing.sectionIndex = secIdx;
         existing.track = data.track;
         existing.category = data.category;
         existing.categories = data.categories || existing.categories || new Set(['all', data.category]);
@@ -1073,11 +1116,12 @@ export default function ThreeBubbleWorld({
 
     const wallThickness = 160;
     const wallOptions = { isStatic: true, restitution: 0.95, friction: 0 };
+    const maxSections = 12; // Permitir 12 secciones de expansión
     const walls = [
-      Matter.Bodies.rectangle(width / 2, -wallThickness / 2, width * 3, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(width / 2, height + wallThickness / 2, width * 3, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
-      Matter.Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
+      Matter.Bodies.rectangle((width * maxSections) / 2, -wallThickness / 2, width * maxSections * 2, wallThickness, wallOptions),
+      Matter.Bodies.rectangle((width * maxSections) / 2, height * maxSections + wallThickness / 2, width * maxSections * 2, wallThickness, wallOptions),
+      Matter.Bodies.rectangle(-wallThickness / 2, (height * maxSections) / 2, wallThickness, height * maxSections * 2, wallOptions),
+      Matter.Bodies.rectangle(width * maxSections + wallThickness / 2, (height * maxSections) / 2, wallThickness, height * maxSections * 2, wallOptions),
     ];
     Matter.World.add(engine.world, walls);
 
@@ -1122,6 +1166,7 @@ export default function ThreeBubbleWorld({
     const waterMesh = new THREE.Mesh(waterGeom, waterMat);
     waterMesh.position.set(0, -height / 2 + height * 0.15, -50);
     scene.add(waterMesh);
+    waterMeshRef.current = waterMesh;
 
     // 4. Instanced Ambient Micro-Bubbles & Cluster Foam Pearls
     const microCount = 105;
@@ -1201,6 +1246,25 @@ export default function ThreeBubbleWorld({
       const dt = Math.min(32, time - lastTime);
       lastTime = time;
 
+      // Smooth Camera Slide Interpolation
+      const dynamicSections = propsRef.current.dynamicSections || [];
+      const activeCat = propsRef.current.activeCategory;
+      const activeIndex = Math.max(0, dynamicSections.findIndex(s => s.id === activeCat));
+      const spacingX = Math.max(width * 0.95, 1200);
+      const spacingY = Math.max(height * 0.90, 850);
+      const isMobile = width < 768;
+      const targetCamX = isMobile ? 0 : activeIndex * spacingX;
+      const targetCamY = isMobile ? -activeIndex * spacingY : 0;
+      cameraOffsetRef.current.x += (targetCamX - cameraOffsetRef.current.x) * 0.08;
+      cameraOffsetRef.current.y += (targetCamY - cameraOffsetRef.current.y) * 0.08;
+      camera.position.x = cameraOffsetRef.current.x;
+      camera.position.y = cameraOffsetRef.current.y;
+      
+      if (waterMeshRef.current) {
+        waterMeshRef.current.position.x = cameraOffsetRef.current.x;
+        waterMeshRef.current.position.y = -height / 2 + height * 0.15 + cameraOffsetRef.current.y;
+      }
+
       // Update Matter.js physical positions
       Matter.Engine.update(engine, dt);
 
@@ -1248,6 +1312,7 @@ export default function ThreeBubbleWorld({
 
       // Apply Spring Constellation & Inter-bubble Liquid Forces
       bubbles.forEach((b, i) => {
+        if (b.isPopping) return; // Dedicated activePops loop handles bursting bubbles
         b.phase += b.phaseSpeed;
 
         const matchQuery = !q ||
@@ -1258,15 +1323,7 @@ export default function ThreeBubbleWorld({
         const matchGenre = currentGenre === 'all' ||
           b.track.genre?.toLowerCase().includes(currentGenre.toLowerCase());
 
-        const matchCat = currentCat === 'all' ||
-          (b.categories && b.categories.has(currentCat)) ||
-          b.category === currentCat ||
-          (currentCat === 'top24h' && (b.category === 'top24h' || (b.categories && b.categories.has('top24h')) || b.track?.category === 'top24h' || (b.track?.playCount24h && b.track.playCount24h > 50))) ||
-          (currentCat === 'suggestions' && (b.category === 'suggestions' || (b.categories && b.categories.has('suggestions')))) ||
-          (currentCat === 'recent' && (b.category === 'recent' || (b.categories && b.categories.has('recent')))) ||
-          (currentCat === 'liked' && currentLiked.includes(b.id));
-
-        const isFilteredIn = matchQuery && matchGenre && matchCat;
+        const isFilteredIn = matchQuery && matchGenre;
         b.targetAlpha = isFilteredIn ? 1.0 : 0.22;
         b.alpha += (b.targetAlpha - b.alpha) * 0.12;
 
@@ -1296,6 +1353,14 @@ export default function ThreeBubbleWorld({
           targetX = width * (0.5 + (b.anchor ? (b.anchor.x - 0.51) * 0.85 : 0));
           targetY = height * (0.50 + (b.anchor ? (b.anchor.y - 0.50) * 0.85 : 0));
         }
+
+        // Section Offset Logic: Each category has its own galaxy offset along X (desktop) or Y (mobile)
+        const mySectionIndex = b.sectionIndex ?? 0;
+        const sectionSpacingX = Math.max(width * 0.95, 1200);
+        const sectionSpacingY = Math.max(height * 0.90, 850);
+        
+        targetX += isMobileScreen ? 0 : mySectionIndex * sectionSpacingX;
+        targetY += isMobileScreen ? mySectionIndex * sectionSpacingY : 0;
 
         const isCurrent = activeCurTrack && activeCurTrack.id === b.id;
         if (isCurrent && !b.anchor) {
@@ -1336,12 +1401,12 @@ export default function ThreeBubbleWorld({
           }
         }
 
-        // Smooth radius scaling
+        // Smooth radius scaling: proportional and balanced (no excessive inflation)
         const dxMouse = b.body.position.x - mouse.x;
         const dyMouse = b.body.position.y - mouse.y;
         const distMouse = Math.hypot(dxMouse, dyMouse);
         const isHovered = distMouse <= b.radius && isFilteredIn;
-        const targetR = isCurrent ? Math.max(b.baseRadius * 1.15, 185) : isHovered ? b.baseRadius * 1.06 : b.baseRadius;
+        const targetR = isCurrent ? b.baseRadius * 1.10 : isHovered ? b.baseRadius * 1.05 : b.baseRadius;
         b.radius += (targetR - b.radius) * 0.08;
 
         // Phase 2.4: Physical Hover Repulsion in Matter.js
@@ -1370,8 +1435,10 @@ export default function ThreeBubbleWorld({
         const threeZ = isCurrent ? 25 : Math.sin(time * 0.001 + b.phase) * 12;
 
         b.mesh.position.set(threeX, threeY, threeZ);
-        const scaleFactor = b.radius / b.baseRadius;
-        b.mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        if (!b.isPopping) {
+          const scaleFactor = b.radius / b.baseRadius;
+          b.mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        }
 
         // Audio pulse modulation (beat & harmonic transients)
         const isPlayingThis = isCurrent && activeIsPlaying;
@@ -1412,7 +1479,7 @@ export default function ThreeBubbleWorld({
       });
 
       // =====================================================================
-      // Phase 2.7 & 2.9: Soap POP Choreography & Sound Flight
+      // Phase 2.7 & 2.9: Soap POP Choreography, Sound Flight & Organic Regrowth
       // =====================================================================
       const now = performance.now();
       const activePops = activePopsRef.current;
@@ -1422,110 +1489,112 @@ export default function ThreeBubbleWorld({
         const b = pop.bubble;
 
         if (elapsed < 120) {
-          // Phase 1 — Pre-pop (0–120ms): Surface tension contraction (1.00 -> 0.90)
+          // Phase 1 — Pre-pop (0–120ms): Surface tension compression
           const prog = elapsed / 120;
-          const preScale = 1.0 - 0.10 * prog;
+          const preScale = 1.0 - 0.15 * prog;
           b.mesh.scale.set(preScale, preScale, preScale);
-        } else if (elapsed < 180) {
-          // Phase 2 — Sudden expansion (120–180ms): Scale surge (0.90 -> 1.28)
-          const prog = (elapsed - 120) / 60;
-          const surgeScale = 0.90 + 0.38 * prog;
-          b.mesh.scale.set(surgeScale, surgeScale, surgeScale);
+        } else if (elapsed < 320) {
+          // Phase 2 — Pop burst & progressive dissolve (120–320ms): Continuous expansion and smooth dissolve
+          const prog = (elapsed - 120) / 200;
+          const burstScale = 0.85 + 0.65 * Math.sin(prog * Math.PI * 0.5);
+          b.mesh.scale.set(burstScale, burstScale, burstScale);
+          b.bubbleMat.uniforms.uOpacity.value = Math.max(0, 1.0 - prog * 1.1);
+          // Gently fade label texture
+          if (b.labelMesh && b.labelMesh.material) {
+            b.labelMesh.material.opacity = Math.max(0, 1.0 - prog * 2.0);
+          }
         } else {
-          // Phase 3 — Pop & Rupture (180ms): Remove body from physical world, inward relaxation
-          if (pop.stage === 'pre-pop') {
-            pop.stage = 'ruptured';
-            b.mesh.visible = false;
-            // Remove from Matter.js world immediately (vacates space physically)
-            if (b.body) {
-              Matter.World.remove(engine.world, b.body);
-            }
-            // Notify consumption so it doesn't re-appear per Phase 2.12
-            propsRef.current.onConsumeTrack?.(pop.track.id);
+          // Phase 3 — Dissolved & Invisible (320ms+): Bubble membrane is completely dissolved
+          b.mesh.visible = false;
+        }
 
-            // Foam Reorganization: neighboring bubbles receive gentle inward relaxation force
-            bubbles.forEach((other) => {
-              if (other !== b && other.body) {
-                const dx = b.body.position.x - other.body.position.x;
-                const dy = b.body.position.y - other.body.position.y;
-                const d = Math.hypot(dx, dy);
-                if (d < 450 && d > 0) {
-                  const inwardPull = (1.0 - d / 450) * 0.00030 * other.body.mass;
-                  Matter.Body.applyForce(other.body, other.body.position, {
-                    x: (dx / d) * inwardPull,
-                    y: (dy / d) * inwardPull,
-                  });
-                }
-              }
-            });
+        const t = Math.min(1.0, elapsed / 580);
+
+        // Update 15 micro-droplets dispersing in 3D
+        pop.droplets.forEach((drop) => {
+          drop.mesh.position.x += drop.vx;
+          drop.mesh.position.y += drop.vy;
+          drop.mesh.position.z += drop.vz;
+          drop.vy -= 0.16; // gravity
+          drop.mesh.material.opacity = Math.max(0, 0.88 * (1.0 - t));
+        });
+
+        // Update shock ring expansion
+        if (pop.shockRing) {
+          const ringScale = 1.0 + t * 0.75;
+          pop.shockRing.scale.set(ringScale, ringScale, 1.0);
+          pop.shockRing.material.opacity = Math.max(0, 0.85 * (1.0 - t * 1.3));
+        }
+
+        // Update sound flight disc (Cubic Bezier curve from popped bubble to current Player position in viewport)
+        if (pop.flightMesh) {
+          const camX = cameraOffsetRef.current?.x || 0;
+          const camY = cameraOffsetRef.current?.y || 0;
+          const p0 = pop.origin;
+          // Target player at the bottom center of the current screen view
+          const p3 = { x: camX, y: camY - height / 2 + 55, z: 20 };
+          const p1 = { x: p0.x + (p3.x - p0.x) * 0.25, y: Math.max(p0.y, p3.y) + 40, z: p0.z + 15 };
+          const p2 = { x: p3.x + (p0.x - p3.x) * 0.20, y: p3.y + 60, z: 20 };
+
+          const u = 1.0 - t;
+          const bx = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
+          const by = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
+          const bz = u * u * u * p0.z + 3 * u * u * t * p1.z + 3 * u * t * t * p2.z + t * t * t * p3.z;
+
+          pop.flightMesh.position.set(bx, by, bz);
+          const discScale = Math.max(0.25, 1.0 - t * 0.72);
+          pop.flightMesh.scale.set(discScale, discScale, 1.0);
+          pop.flightMesh.material.opacity = Math.max(0, 1.0 - t * 0.9);
+        }
+
+        // Complete choreography at 580ms — smoothly finalize track consumption & foam relaxation
+        if (t >= 1.0) {
+          scene.remove(pop.dropletGroup);
+          pop.droplets.forEach((d) => {
+            d.mesh.geometry?.dispose();
+            d.mesh.material?.dispose();
+          });
+          if (pop.shockRing) {
+            scene.remove(pop.shockRing);
+            pop.shockRing.geometry?.dispose();
+            pop.shockRing.material?.dispose();
+          }
+          if (pop.flightMesh) {
+            scene.remove(pop.flightMesh);
+            pop.flightMesh.geometry?.dispose();
+            pop.flightMesh.material?.dispose();
           }
 
-          // Phase 4 — Micro-droplets dispersion & Sound Flight (180ms - 580ms)
-          const flightElapsed = elapsed - 180;
-          const flightDur = 380;
-          const t = Math.min(1.0, flightElapsed / flightDur);
-
-          // Update 15 micro-droplets
-          pop.droplets.forEach((drop) => {
-            drop.mesh.position.x += drop.vx;
-            drop.mesh.position.y += drop.vy;
-            drop.mesh.position.z += drop.vz;
-            drop.vy -= 0.16; // gravity
-            drop.mesh.material.opacity = Math.max(0, 0.88 * (1.0 - t));
+          // Organic foam relaxation: remaining bubbles gently drift toward the freed space
+          bubbles.forEach((other) => {
+            if (other !== b && other.body) {
+              const dx = b.body.position.x - other.body.position.x;
+              const dy = b.body.position.y - other.body.position.y;
+              const d = Math.hypot(dx, dy);
+              if (d < 450 && d > 0) {
+                const inwardPull = (1.0 - d / 450) * 0.00032 * other.body.mass;
+                Matter.Body.applyForce(other.body, other.body.position, {
+                  x: (dx / d) * inwardPull,
+                  y: (dy / d) * inwardPull,
+                });
+              }
+            }
           });
 
-          // Update shock ring expansion
-          if (pop.shockRing) {
-            const ringScale = 1.0 + t * 0.45;
-            pop.shockRing.scale.set(ringScale, ringScale, 1.0);
-            pop.shockRing.material.opacity = Math.max(0, 0.75 * (1.0 - t * 1.5));
+          // Dispose popping bubble and notify consumed track
+          b.sphereGeom?.dispose();
+          b.bubbleMat?.dispose();
+          b.labelMesh?.geometry?.dispose();
+          b.labelMesh?.material?.dispose();
+          scene.remove(b.mesh);
+          if (b.body) {
+            Matter.World.remove(engine.world, b.body);
           }
+          bubblesMapRef.current.delete(b.key);
+          activePops.splice(pIdx, 1);
 
-          // Update sound flight disc (Cubic Bezier curve to Player at bottom)
-          if (pop.flightMesh) {
-            const p0 = pop.origin;
-            const p3 = { x: 0, y: -height / 2 + 55, z: 20 };
-            const p1 = { x: p0.x + (p3.x - p0.x) * 0.25, y: p0.y + 110, z: p0.z + 15 };
-            const p2 = { x: p3.x + (p0.x - p3.x) * 0.20, y: p3.y + 140, z: 20 };
-
-            const u = 1.0 - t;
-            const bx = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
-            const by = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
-            const bz = u * u * u * p0.z + 3 * u * u * t * p1.z + 3 * u * t * t * p2.z + t * t * t * p3.z;
-
-            pop.flightMesh.position.set(bx, by, bz);
-            const discScale = Math.max(0.25, 1.0 - t * 0.72);
-            pop.flightMesh.scale.set(discScale, discScale, 1.0);
-          }
-
-          // Phase 5 — Arrival at Player (elapsed >= 560ms)
-          if (t >= 1.0) {
-            propsRef.current.onPlayTrack?.(pop.track);
-
-            scene.remove(pop.dropletGroup);
-            pop.droplets.forEach((d) => {
-              d.mesh.geometry?.dispose();
-              d.mesh.material?.dispose();
-            });
-            if (pop.shockRing) {
-              scene.remove(pop.shockRing);
-              pop.shockRing.geometry?.dispose();
-              pop.shockRing.material?.dispose();
-            }
-            if (pop.flightMesh) {
-              scene.remove(pop.flightMesh);
-              pop.flightMesh.geometry?.dispose();
-              pop.flightMesh.material?.dispose();
-            }
-
-            b.sphereGeom?.dispose();
-            b.bubbleMat?.dispose();
-            b.labelMesh?.geometry?.dispose();
-            b.labelMesh?.material?.dispose();
-            scene.remove(b.mesh);
-            bubblesMapRef.current.delete(b.track.id);
-            activePops.splice(pIdx, 1);
-          }
+          // Mark track as consumed once animation has gracefully completed!
+          propsRef.current.onConsumeTrack?.(pop.track.id);
         }
       }
 
@@ -1675,6 +1744,9 @@ export default function ThreeBubbleWorld({
     if (!b || b.isPopping) return;
     b.isPopping = true;
 
+    // Immediately trigger track playback so user has zero latency!
+    propsRef.current.onPlayTrack?.(b.track);
+
     // Tactile acoustic pop feedback
     playSoapPopSound(b.radius > 140 ? 0.85 : b.radius < 100 ? 1.25 : 1.0);
 
@@ -1745,14 +1817,18 @@ export default function ThreeBubbleWorld({
     });
   }, [playSoapPopSound]);
 
-  // Pointer Interaction Handlers (Distinguishes Drag vs Tap with 6px threshold per Phase 2.5)
   const handlePointerMove = (e) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    mousePosRef.current.x = x;
-    mousePosRef.current.y = y;
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+    const worldX = clientX + (cameraOffsetRef.current?.x || 0);
+    const worldY = clientY - (cameraOffsetRef.current?.y || 0);
+    mousePosRef.current.x = worldX;
+    mousePosRef.current.y = worldY;
+
+    const x = worldX;
+    const y = worldY;
 
     const drag = dragStateRef.current;
     if (drag.bubble) {
@@ -1783,8 +1859,12 @@ export default function ThreeBubbleWorld({
   const handlePointerDown = (e) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+    const worldX = clientX + (cameraOffsetRef.current?.x || 0);
+    const worldY = clientY - (cameraOffsetRef.current?.y || 0);
+    const x = worldX;
+    const y = worldY;
     mousePosRef.current.isDown = true;
 
     let target = null;
@@ -1800,7 +1880,7 @@ export default function ThreeBubbleWorld({
 
     if (!target) {
       // Swipe on empty canvas water surface for Category Switching (Phase 2.11)
-      canvasDragRef.current = { isSwiping: true, startX: x, startY: y };
+      canvasDragRef.current = { isSwiping: true, startX: clientX, startY: clientY };
     }
 
     dragStateRef.current = {
@@ -1837,21 +1917,42 @@ export default function ThreeBubbleWorld({
       const dxSwipe = curX - canvasDragRef.current.startX;
       const dySwipe = curY - canvasDragRef.current.startY;
 
-      if (Math.abs(dxSwipe) > 45 && Math.abs(dxSwipe) > Math.abs(dySwipe) * 1.3) {
-        const categories = ['top24h', 'recent', 'suggestions', 'all'];
+      const isMobile = (window.innerWidth || rect?.width || 0) < 768;
+      let swipedPrev = false;
+      let swipedNext = false;
+      let validSwipe = false;
+
+      if (isMobile) {
+        if (Math.abs(dySwipe) > 40 && Math.abs(dySwipe) > Math.abs(dxSwipe) * 1.3) {
+           validSwipe = true;
+           swipedPrev = dySwipe > 0;
+           swipedNext = dySwipe < 0;
+        }
+      } else {
+        if (Math.abs(dxSwipe) > 45 && Math.abs(dxSwipe) > Math.abs(dySwipe) * 1.3) {
+           validSwipe = true;
+           swipedPrev = dxSwipe > 0;
+           swipedNext = dxSwipe < 0;
+        }
+      }
+
+      if (validSwipe) {
+        const dynamicSections = propsRef.current.dynamicSections || [];
+        const categories = dynamicSections.length > 0 ? dynamicSections.map(s => s.id) : ['top24h', 'recent', 'suggestions', 'all'];
         const curIdx = categories.indexOf(propsRef.current.activeCategory);
-        const nextIdx = dxSwipe < 0
-          ? (curIdx + 1) % categories.length
-          : (curIdx - 1 + categories.length) % categories.length;
+        const nextIdx = swipedPrev
+          ? (curIdx - 1 + categories.length) % categories.length
+          : (curIdx + 1) % categories.length;
         const nextCat = categories[nextIdx];
         propsRef.current.onSelectCategory?.(nextCat);
 
         // Gentle physical wave drift impulse across the entire bubble mass
-        const impulseX = dxSwipe < 0 ? -1.8 : 1.8;
+        const impulseX = isMobile ? 0 : (swipedPrev ? 1.8 : -1.8);
+        const impulseY = isMobile ? (swipedPrev ? 1.8 : -1.8) : 0;
         for (const b of bubblesMapRef.current.values()) {
           Matter.Body.setVelocity(b.body, {
             x: b.body.velocity.x + impulseX,
-            y: b.body.velocity.y,
+            y: b.body.velocity.y + impulseY,
           });
         }
       }
@@ -1891,7 +1992,8 @@ export default function ThreeBubbleWorld({
   // Phase 2.14: Accessible Keyboard Navigation
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const categories = ['top24h', 'recent', 'suggestions', 'all'];
+      const dynamicSections = propsRef.current.dynamicSections || [];
+      const categories = dynamicSections.length > 0 ? dynamicSections.map(s => s.id) : ['top24h', 'recent', 'suggestions', 'all'];
       const curIdx = categories.indexOf(propsRef.current.activeCategory);
       const nextIdx = e.key === 'ArrowRight'
         ? (curIdx + 1) % categories.length

@@ -19,6 +19,7 @@ import { extractTrackPalette } from '../utils/paletteExtractor';
  * 10. DIAGNOSTIC DEBUGGER: Exposes window.__superfind_debug__ for automated verification.
  */
 export default function BubbleWorld({
+  dynamicSections = [],
   suggestions = [],
   topTracks = [],
   recentTracks = [],
@@ -45,6 +46,7 @@ export default function BubbleWorld({
   const backgroundBokehRef = useRef([]);
   const animationFrameRef = useRef(null);
   const mousePosRef = useRef({ x: -1000, y: -1000, isDown: false, vx: 0, vy: 0, lastX: -1000, lastY: -1000 });
+  const scrollOffsetRef = useRef({ x: 0, y: 0 });
   const [hoveredTrack, setHoveredTrack] = useState(null);
 
   // Exact reference constellation anchors & radii
@@ -79,10 +81,12 @@ export default function BubbleWorld({
 
   // Latest props reference
   const propsRef = useRef({
+    dynamicSections,
     currentTrack,
     isPlaying,
     isDarkMode,
     activeCategory,
+    onSelectCategory,
     searchQuery,
     selectedGenre,
     likedTrackIds,
@@ -95,10 +99,12 @@ export default function BubbleWorld({
 
   useEffect(() => {
     propsRef.current = {
+      dynamicSections,
       currentTrack,
       isPlaying,
       isDarkMode,
       activeCategory,
+      onSelectCategory,
       searchQuery,
       selectedGenre,
       likedTrackIds,
@@ -108,65 +114,102 @@ export default function BubbleWorld({
     };
   });
 
-  // Aggregate catalog data with strict title deduplication & constellation slots
+  // Aggregated catalog data: Populates each dynamic section with its own galaxy of bubbles
   const allBubblesData = useMemo(() => {
-    const map = new Map();
-    const seenTitles = new Set();
+    const list = [];
+    const poolMap = new Map();
 
-    const ANCHOR_KEYS = ['track-1', 'track-2', 'track-3', 'track-4', 'track-5', 'track-6', 'track-7', 'track-8', 'track-9'];
-    let slotIdx = 0;
-
-    const addTrack = (item, defaultCategory, defaultLabel, defaultRadius) => {
-      const t = item.track || item;
-      if (!t || !t.id) return;
-      if (consumedTrackIds && consumedTrackIds.has(t.id)) return; // Skip consumed tracks per Phase 2.12
-      const normalizedTitle = (t.title || '').toLowerCase().trim();
-
-      const existing = map.get(t.id) || (seenTitles.has(normalizedTitle) ? Array.from(map.values()).find(v => (v.track.title || '').toLowerCase().trim() === normalizedTitle) : null);
-      if (existing) {
-        existing.categories.add(defaultCategory);
-        if (defaultCategory === 'top24h') existing.categories.add('top24h');
-        return;
+    (suggestions || []).forEach((item) => {
+      const t = item?.track || item;
+      if (t && t.id && !poolMap.has(t.id)) {
+        poolMap.set(t.id, { ...t, tier: item?.tier || t.tier || 'GROWING', reasoning: item?.reasoning || t.reasoning });
       }
-      seenTitles.add(normalizedTitle);
+    });
+    (topTracks || []).forEach((t) => {
+      if (t && t.id && !poolMap.has(t.id)) poolMap.set(t.id, t);
+    });
+    (recentTracks || []).forEach((t) => {
+      if (t && t.id && !poolMap.has(t.id)) poolMap.set(t.id, t);
+    });
 
-      const assignedKey = ANCHORS[t.id] ? t.id : ANCHOR_KEYS[slotIdx % ANCHOR_KEYS.length];
-      const anchor = ANCHORS[assignedKey];
-      slotIdx++;
+    const allTracks = Array.from(poolMap.values());
+    if (allTracks.length === 0) return [];
 
-      const cats = new Set(['all', defaultCategory]);
-      if (t.category) cats.add(t.category);
-      if (defaultCategory === 'top24h' || (t.playCount24h && t.playCount24h > 50)) {
-        cats.add('top24h');
+    const sections = (dynamicSections && dynamicSections.length > 0) ? dynamicSections : [
+      { id: 'top24h', label: 'Top 24hs' },
+      { id: 'all', label: 'Todas las burbujas' },
+      { id: 'recent', label: 'Novedades' },
+    ];
+
+    sections.forEach((sec, secIdx) => {
+      let sectionTracks = [];
+      if (sec.id === 'top24h') {
+        sectionTracks = [...allTracks].sort((a, b) => (b.playCount24h || 0) - (a.playCount24h || 0)).slice(0, 14);
+      } else if (sec.id === 'all') {
+        sectionTracks = allTracks.slice(0, 20);
+      } else if (sec.id === 'recent') {
+        sectionTracks = (recentTracks && recentTracks.length > 0 ? recentTracks : allTracks).slice(0, 14);
+      } else if (sec.id.startsWith('genre-')) {
+        const targetGenre = (sec.genre || sec.label || '').toLowerCase().trim();
+        sectionTracks = allTracks.filter((t) => {
+          const g = (t.genre || '').toLowerCase().trim();
+          return g.includes(targetGenre) || targetGenre.includes(g.split('/')[0].trim());
+        }).slice(0, 16);
+        if (sectionTracks.length === 0) {
+          sectionTracks = allTracks.slice(0, 12);
+        }
+      } else if (sec.id === 'liked') {
+        sectionTracks = allTracks.filter((t) => likedTrackIds && likedTrackIds.includes(t.id));
+        if (sectionTracks.length === 0) {
+          sectionTracks = allTracks.slice(0, 5);
+        }
+      } else {
+        sectionTracks = allTracks.slice(0, 12);
       }
 
-      map.set(t.id, {
-        track: t,
-        category: defaultCategory,
-        categories: cats,
-        categoryLabel: anchor?.label || defaultLabel || (t.tier === 'UNDERGROUND' ? 'GEMA' : 'con IA'),
-        tier: item.tier || t.tier || 'GROWING',
-        reasoning: item.reasoning || t.reasoning,
-        baseRadius: anchor?.r || defaultRadius,
-        anchor: anchor || null,
-        assignedAnchorKey: assignedKey,
+      // Filter out consumed tracks so they don't block the screen
+      const availableTracks = sectionTracks.filter(t => !consumedTrackIds || !consumedTrackIds.has(t.id));
+
+      availableTracks.forEach((t, itemIdx) => {
+        let anchor;
+        if (itemIdx === 0) {
+          anchor = {
+            x: 0.51,
+            y: 0.49,
+            r: sec.id === 'top24h' ? 120 : 110,
+            label: sec.id === 'top24h' ? 'Top 1' : sec.label
+          };
+        } else {
+          const phi = itemIdx * 2.399963;
+          const dist = 100 + Math.sqrt(itemIdx) * 65;
+          anchor = {
+            x: Math.max(0.18, Math.min(0.84, 0.51 + (Math.cos(phi) * dist) / 1200)),
+            y: Math.max(0.20, Math.min(0.80, 0.50 + (Math.sin(phi) * dist * 0.70) / 800)),
+            r: Math.max(68, 98 - itemIdx * 2.2),
+            label: t.tier === 'UNDERGROUND' ? 'GEMA' : sec.id === 'top24h' ? 'Top 24h' : sec.id === 'recent' ? 'Novedad' : sec.label,
+          };
+        }
+
+        const uniqueKey = `${sec.id}__${t.id}`;
+        list.push({
+          track: t,
+          uniqueKey,
+          sectionId: sec.id,
+          sectionIndex: secIdx,
+          category: sec.id,
+          categories: new Set(['all', sec.id]),
+          categoryLabel: anchor.label,
+          tier: t.tier || 'GROWING',
+          reasoning: t.reasoning,
+          baseRadius: anchor.r,
+          anchor,
+          assignedAnchorKey: uniqueKey,
+        });
       });
-    };
-
-    suggestions.forEach((item, idx) => {
-      addTrack(item, 'suggestions', 'con IA', idx === 0 ? 136 : idx < 3 ? 96 : 84);
     });
 
-    topTracks.forEach((t, idx) => {
-      addTrack(t, 'top24h', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Top 24h', idx === 0 ? 98 : idx < 4 ? 86 : 74);
-    });
-
-    recentTracks.forEach((t, idx) => {
-      addTrack(t, 'recent', t.tier === 'UNDERGROUND' ? 'GEMA' : 'Novedad', idx < 3 ? 82 : 70);
-    });
-
-    return Array.from(map.values());
-  }, [suggestions, topTracks, recentTracks]);
+    return list;
+  }, [dynamicSections, suggestions, topTracks, recentTracks, likedTrackIds, consumedTrackIds]);
 
   // Synchronize catalog items into persistent bubbles map without recreating existing bodies
   const syncBubblesWithCatalog = useCallback((catalogData) => {
@@ -178,22 +221,26 @@ export default function BubbleWorld({
     const height = Math.max(680, container?.clientHeight || window.innerHeight || 800);
     const bubblesMap = bubblesMapRef.current;
     const activeKeys = new Set();
+    const sectionSpacingX = Math.max(width * 0.95, 1200);
+    const sectionSpacingY = Math.max(height * 0.90, 850);
+    const isMobileScreen = width < 768;
 
     catalogData.forEach((data) => {
-      const uniqueKey = (data.track.title || '').toLowerCase().trim() || data.track.id;
+      const uniqueKey = data.uniqueKey || `${data.sectionId || 'all'}__${data.track.id}`;
       activeKeys.add(uniqueKey);
 
       const anchor = data.anchor || ANCHORS[data.track.id] || ANCHORS[data.assignedAnchorKey];
       const responsiveScale = width < 500 ? 0.68 : width < 900 ? 0.82 : 1.0;
+      const radius = (anchor?.r || data.baseRadius) * responsiveScale;
+      const secIdx = data.sectionIndex ?? 0;
 
       if (!bubblesMap.has(uniqueKey)) {
-        let seedX = width * (anchor ? anchor.x : 0.53);
-        let seedY = height * (anchor ? anchor.y : 0.50);
+        let seedX = width * (anchor ? anchor.x : 0.53) + (isMobileScreen ? 0 : secIdx * sectionSpacingX);
+        let seedY = height * (anchor ? anchor.y : 0.50) + (isMobileScreen ? secIdx * sectionSpacingY : 0);
 
-        const radius = (anchor?.r || data.baseRadius) * responsiveScale;
         const padding = radius + 20;
-        seedX = Math.max(padding, Math.min(width - padding, seedX));
-        seedY = Math.max(padding, Math.min(height - padding, seedY));
+        seedX = Math.max(padding, seedX);
+        seedY = Math.max(padding, seedY);
 
         const body = Matter.Bodies.circle(seedX, seedY, radius, {
           restitution: 0.85,
@@ -207,6 +254,8 @@ export default function BubbleWorld({
         bubblesMap.set(uniqueKey, {
           id: data.track.id,
           key: uniqueKey,
+          sectionId: data.sectionId,
+          sectionIndex: secIdx,
           body,
           bodyId: body.id,
           track: data.track,
@@ -235,13 +284,15 @@ export default function BubbleWorld({
       } else {
         const existing = bubblesMap.get(uniqueKey);
         existing.id = data.track.id;
+        existing.sectionId = data.sectionId;
+        existing.sectionIndex = secIdx;
         existing.track = data.track;
         existing.category = data.category;
         existing.categories = data.categories || existing.categories || new Set(['all', data.category]);
         existing.categoryLabel = data.categoryLabel;
         existing.tier = data.tier;
         existing.reasoning = data.reasoning;
-        existing.baseRadius = (anchor?.r || data.baseRadius) * responsiveScale;
+        existing.baseRadius = radius;
         existing.anchor = anchor || existing.anchor;
         existing.assignedAnchorKey = data.assignedAnchorKey || existing.assignedAnchorKey;
         existing.palette = extractTrackPalette(data.track);
@@ -302,14 +353,15 @@ export default function BubbleWorld({
     });
     engineRef.current = engine;
 
-    // Static containment walls
+    // Static containment walls (expanded across 12 sections for continuous multi-constellation world)
     const wallThickness = 160;
     const wallOptions = { isStatic: true, restitution: 0.95, friction: 0 };
+    const maxSections = 12;
     const walls = [
-      Matter.Bodies.rectangle(width / 2, -wallThickness / 2, width * 3, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(width / 2, height + wallThickness / 2, width * 3, wallThickness, wallOptions),
-      Matter.Bodies.rectangle(-wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
-      Matter.Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 3, wallOptions),
+      Matter.Bodies.rectangle((width * maxSections) / 2, -wallThickness / 2, width * maxSections * 2, wallThickness, wallOptions),
+      Matter.Bodies.rectangle((width * maxSections) / 2, height * maxSections + wallThickness / 2, width * maxSections * 2, wallOptions),
+      Matter.Bodies.rectangle(-wallThickness / 2, (height * maxSections) / 2, wallThickness, height * maxSections * 2, wallOptions),
+      Matter.Bodies.rectangle(width * maxSections + wallThickness / 2, (height * maxSections) / 2, wallThickness, height * maxSections * 2, wallOptions),
     ];
     wallsRef.current = walls;
     Matter.World.add(engine.world, walls);
@@ -497,13 +549,29 @@ export default function BubbleWorld({
       lastTime = time;
 
       Matter.Engine.update(engine, dt);
+      
+      const dynamicSectionsList = propsRef.current.dynamicSections || [];
+      const activeCat = propsRef.current.activeCategory;
+      const activeIndex = Math.max(0, dynamicSectionsList.findIndex(s => s.id === activeCat));
+      const sectionSpacingX = Math.max(width * 0.95, 1200);
+      const sectionSpacingY = Math.max(height * 0.90, 850);
+      const isMobileScreen = width < 768;
+      
+      const targetCamX = isMobileScreen ? 0 : activeIndex * sectionSpacingX;
+      const targetCamY = isMobileScreen ? activeIndex * sectionSpacingY : 0;
+      scrollOffsetRef.current.x += (targetCamX - scrollOffsetRef.current.x) * 0.08;
+      scrollOffsetRef.current.y += (targetCamY - scrollOffsetRef.current.y) * 0.08;
 
       const ctx = canvas.getContext('2d');
       ctx.save();
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, width, height);
+      
+      ctx.save();
+      ctx.translate(-scrollOffsetRef.current.x, -scrollOffsetRef.current.y);
 
       const mouse = mousePosRef.current;
+      const worldMouse = { x: mouse.x + scrollOffsetRef.current.x, y: mouse.y + scrollOffsetRef.current.y };
       const bubbles = Array.from(bubblesMapRef.current.values());
       const micros = microBubblesRef.current;
       const bokeh = backgroundBokehRef.current;
@@ -641,15 +709,7 @@ export default function BubbleWorld({
         const matchGenre = currentGenre === 'all' ||
           b.track.genre?.toLowerCase().includes(currentGenre.toLowerCase());
 
-        const matchCat = currentCat === 'all' ||
-          (b.categories && b.categories.has(currentCat)) ||
-          b.category === currentCat ||
-          (currentCat === 'top24h' && (b.category === 'top24h' || (b.categories && b.categories.has('top24h')) || b.track?.category === 'top24h' || (b.track?.playCount24h && b.track.playCount24h > 50))) ||
-          (currentCat === 'suggestions' && (b.category === 'suggestions' || (b.categories && b.categories.has('suggestions')))) ||
-          (currentCat === 'recent' && (b.category === 'recent' || (b.categories && b.categories.has('recent')))) ||
-          (currentCat === 'liked' && currentLiked.includes(b.id));
-
-        const isFilteredIn = matchQuery && matchGenre && matchCat;
+        const isFilteredIn = matchQuery && matchGenre;
         b.targetAlpha = isFilteredIn ? 1 : 0.22;
         b.alpha += (b.targetAlpha - b.alpha) * 0.12;
 
@@ -678,6 +738,11 @@ export default function BubbleWorld({
           targetX = width * 0.53;
           targetY = height * 0.50;
         }
+
+        // Apply Section Offset: Each bubble uses its own sectionIndex for positioning
+        const mySectionIndex = b.sectionIndex ?? 0;
+        targetX += isMobileScreen ? 0 : mySectionIndex * sectionSpacingX;
+        targetY += isMobileScreen ? mySectionIndex * sectionSpacingY : 0;
 
         const dxCenter = targetX - b.body.position.x;
         const dyCenter = targetY - b.body.position.y;
@@ -1077,7 +1142,8 @@ export default function BubbleWorld({
         ctx.restore();
       });
 
-      ctx.restore();
+      ctx.restore(); // Restore translate
+      ctx.restore(); // Restore dpr scale
       animationFrameRef.current = requestAnimationFrame(render);
     };
 
@@ -1098,11 +1164,12 @@ export default function BubbleWorld({
       canvas.style.height = `${newH}px`;
 
       const wallThickness = 160;
+      const maxSections = 12;
       const walls = wallsRef.current;
-      if (walls[0]) Matter.Body.setPosition(walls[0], { x: newW / 2, y: -wallThickness / 2 });
-      if (walls[1]) Matter.Body.setPosition(walls[1], { x: newW / 2, y: newH + wallThickness / 2 });
-      if (walls[2]) Matter.Body.setPosition(walls[2], { x: -wallThickness / 2, y: newH / 2 });
-      if (walls[3]) Matter.Body.setPosition(walls[3], { x: newW + wallThickness / 2, y: newH / 2 });
+      if (walls[0]) Matter.Body.setPosition(walls[0], { x: (newW * maxSections) / 2, y: -wallThickness / 2 });
+      if (walls[1]) Matter.Body.setPosition(walls[1], { x: (newW * maxSections) / 2, y: newH * maxSections + wallThickness / 2 });
+      if (walls[2]) Matter.Body.setPosition(walls[2], { x: -wallThickness / 2, y: (newH * maxSections) / 2 });
+      if (walls[3]) Matter.Body.setPosition(walls[3], { x: newW * maxSections + wallThickness / 2, y: (newH * maxSections) / 2 });
     };
 
     window.addEventListener('resize', handleResize);
@@ -1181,21 +1248,23 @@ export default function BubbleWorld({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    const worldX = x + scrollOffsetRef.current.x;
+    const worldY = y + scrollOffsetRef.current.y;
 
     mousePosRef.current = {
-      x,
-      y,
+      x: worldX,
+      y: worldY,
       isDown: mousePosRef.current.isDown,
-      vx: x - mousePosRef.current.lastX,
-      vy: y - mousePosRef.current.lastY,
-      lastX: x,
-      lastY: y,
+      vx: worldX - mousePosRef.current.lastX,
+      vy: worldY - mousePosRef.current.lastY,
+      lastX: worldX,
+      lastY: worldY,
     };
 
     const bubbles = Array.from(bubblesMapRef.current.values());
     const hovered = bubbles.find(b => {
-      const dx = b.body.position.x - x;
-      const dy = b.body.position.y - y;
+      const dx = b.body.position.x - worldX;
+      const dy = b.body.position.y - worldY;
       return Math.hypot(dx, dy) <= b.radius;
     });
 
@@ -1214,13 +1283,15 @@ export default function BubbleWorld({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    const worldX = x + scrollOffsetRef.current.x;
+    const worldY = y + scrollOffsetRef.current.y;
 
     mousePosRef.current.isDown = true;
 
     const bubbles = Array.from(bubblesMapRef.current.values());
     const clicked = bubbles.find(b => {
-      const dx = b.body.position.x - x;
-      const dy = b.body.position.y - y;
+      const dx = b.body.position.x - worldX;
+      const dy = b.body.position.y - worldY;
       return Math.hypot(dx, dy) <= b.radius;
     });
 

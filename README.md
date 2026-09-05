@@ -78,7 +78,7 @@ WWZ/
 │
 ├── docker-compose.yml               # Despliegue local completo en 1 comando
 ├── deploy.sh / deploy.ps1           # Scripts de despliegue a GCP Cloud Run
-├── ARCHITECTURE.md                  # Documento profundo de diseño y preguntas para entrevistas
+├── ARCHITECTURE.md                  # Documentación de diseño y arquitectura del sistema
 └── README.md
 ```
 
@@ -150,7 +150,5 @@ chmod +x deploy.sh
 ./deploy.sh "tu-proyecto-gcp" "us-central1"
 ```
 
----
-
-## 📚 Justificación de Arquitectura para Entrevistas
-Consulta el archivo [`ARCHITECTURE.md`](file:///F:/WWZ/ARCHITECTURE.md) para acceder a los diagramas de arquitectura detallados, comparativas de costos y la guía de respuestas técnicas preparadas para entrevistas de trabajo.
+## 📚 Arquitectura y Diseño Técnico
+Consulta el archivo [`ARCHITECTURE.md`](file:///F:/WWZ/ARCHITECTURE.md) para acceder a los diagramas de arquitectura detallados, modelo de datos y flujo de componentes.

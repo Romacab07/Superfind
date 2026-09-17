@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, SlidersHorizontal, X, Radio, Compass, Heart, Moon, Sun, Sparkles, TrendingUp, Music, Info, Headphones } from 'lucide-react';
+import { isDemoMode } from '../services/api';
 
 /**
  * MainHeader - Floating Top Overlay with Soap Bubble Capsules
@@ -55,6 +56,11 @@ export default function MainHeader({
           <h2 className="text-xs sm:text-sm font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-500 font-display leading-tight">
             Sin derechos, sin límites.
           </h2>
+          {isDemoMode && (
+            <span className="mt-1.5 w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-300">
+              Demo · catálogo simulado
+            </span>
+          )}
           <div className="bubble-gleam !left-[8%] !w-[24%] !top-[12%]" />
         </div>
 

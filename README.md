@@ -11,6 +11,23 @@
 
 ---
 
+## 🌐 Demo en vivo
+
+**▶ [Abrir la demo interactiva](https://romacab07.github.io/Superfind/)**
+
+Demo estática publicada en **GitHub Pages**. Corre 100% en el navegador sobre un catálogo curado de música Creative Commons, así que podés explorar el mundo de burbujas, la constelación, el cambio de tema y el reproductor **sin clonar el repo, sin backend y sin API keys**.
+
+[![Vista desktop — modo claro](docs/screenshots/three_10_desktop_light_v2.png)](https://romacab07.github.io/Superfind/)
+[![Vista desktop — modo oscuro](docs/screenshots/three_10_desktop_dark_v2.png)](https://romacab07.github.io/Superfind/)
+
+| Mobile | Tablet |
+| :---: | :---: |
+| ![Vista mobile](docs/screenshots/final_mobile.png) | ![Vista tablet](docs/screenshots/final_tablet.png) |
+
+> En la demo, cada llamada a `/api` se resuelve contra un catálogo local (`frontend/src/services/demoCatalog.js`) en vez del backend, y el header muestra el badge **Demo · catálogo simulado** para dejar en claro que los datos son de muestra. La demo se publica automáticamente con [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) en cada push a `master`.
+
+---
+
 ## 🚀 Características Principales
 
 1. **Frontend MVP Visual (3 Bloques Clave)**:
@@ -76,7 +93,11 @@ Superfind/
 │   ├── variables.tf
 │   └── outputs.tf
 │
+├── .github/workflows/
+│   └── deploy-pages.yml             # Publica la demo estática en GitHub Pages
+├── music/                           # Carpeta opcional para tus propios audios (ignorada por Git)
 ├── docker-compose.yml               # Despliegue local completo en 1 comando
+├── .env.example                     # Variables de entorno opcionales (Jamendo, Gemini, música local)
 ├── deploy.sh / deploy.ps1           # Scripts de despliegue a GCP Cloud Run
 ├── ARCHITECTURE.md                  # Documentación de diseño y arquitectura del sistema
 └── README.md
@@ -114,6 +135,28 @@ docker compose up --build
 ```
 - **Frontend Web**: `http://localhost:3000`
 - **Backend API**: `http://localhost:8080`
+
+#### Variables de entorno opcionales
+
+Copiá `.env.example` a `.env` y completá lo que necesites. **Ninguna es obligatoria**: sin ninguna variable la app arranca igual y sirve el catálogo semilla.
+
+| Variable | Qué habilita |
+| :--- | :--- |
+| `JAMENDO_CLIENT_ID` | Sincronización real desde el catálogo abierto de Jamendo |
+| `GEMINI_API_KEY` | Recomendaciones con Gemini AI (sin ella se usa el motor heurístico de fallback) |
+| `LOCAL_MUSIC_PATH` | Carpeta con tus propios audios (mp3 / wav / m4a / ogg). Si queda vacía, el provider `LOCAL_DISK` permanece inactivo y no se escanea ningún directorio del host |
+
+---
+
+### Opción 3: Demo estática en local (sin backend)
+
+```bash
+cd frontend
+npm install
+npm run build:demo
+npm run preview
+```
+> Genera la misma build que se publica en GitHub Pages: catálogo curado embebido, cero llamadas al backend.
 
 ---
 

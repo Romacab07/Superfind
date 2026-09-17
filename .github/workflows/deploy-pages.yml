@@ -1,0 +1,69 @@
+name: Deploy static demo to GitHub Pages
+
+# Publishes the frontend as a backend-free static demo (VITE_DEMO_MODE=true) so anyone can
+# explore the bubble world straight from the browser, without cloning the repo or setting
+# up GCP / Jamendo / Gemini credentials.
+#
+# One-time setup: repository Settings → Pages → Build and deployment → Source: GitHub Actions.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build static demo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build demo bundle
+        working-directory: frontend
+        env:
+          # Project sites are served from /<repository>/, not the domain root.
+          # `build:demo` sets VITE_DEMO_MODE=true so the bundle serves the curated catalog
+          # instead of calling a backend.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build:demo
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

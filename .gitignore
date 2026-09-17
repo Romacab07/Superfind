@@ -12,7 +12,9 @@
 
 # IDE & OS
 .idea/
-.vscode/
+.vscode/*
+# Shared MCP server registration — useful for everyone, contains no secrets.
+!.vscode/mcp.json
 *.iml
 .DS_Store
 Thumbs.db

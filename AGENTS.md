@@ -160,3 +160,23 @@ Antes de dar por concluida una tarea:
 * [ ] Compatibilidad dual verificada (perfil `local` y `gcp`).
 * [ ] Documentación actualizada en `docs/` o `ARCHITECTURE.md` si hubo cambios de diseño.
 * [ ] Resumen claro de cambios entregado al usuario.
+
+---
+
+## 11. Contexto de Agentes (context-mode)
+
+El repo incluye la configuración de [context-mode](https://github.com/mksglu/context-mode), un servidor MCP que mantiene la salida cruda de las herramientas fuera de la ventana de contexto:
+
+* [`.mcp.json`](.mcp.json) — registro para Claude Code (vía `npx`, sin instalación global).
+* [`.vscode/mcp.json`](.vscode/mcp.json) — registro para VS Code Copilot.
+* [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — reglas de routing que se aplican cuando el cliente soporta MCP.
+
+> [!IMPORTANT]
+> No todos los agentes soportan MCP. Cuando el cliente no lo soporte (o no esté disponible), aplicar igual la disciplina central, que es agnóstica de herramienta:
+
+1. **Pensar en código**: para analizar, contar, filtrar o comparar, escribir un script que imprima sólo la respuesta en lugar de volcar archivos y logs enteros al contexto.
+2. **Leer para editar, no para explorar**: usar búsqueda (ripgrep) y leer ventanas acotadas; reservar la lectura completa para el momento de editar.
+3. **Escribir artefactos en archivos**: nunca volcar salidas largas inline; entregar la ruta del archivo y una línea de descripción.
+4. **Memoria de sesión**: antes de preguntar "¿en qué estábamos?", revisar el estado de la rama, `git log` y la lista de tareas activa.
+
+Esta sección es sólo sobre **dónde va el dato**. Las convenciones sobre **qué construir** siguen en las secciones 2 a 10.

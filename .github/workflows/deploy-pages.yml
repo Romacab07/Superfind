@@ -4,11 +4,15 @@ name: Deploy static demo to GitHub Pages
 # explore the bubble world straight from the browser, without cloning the repo or setting
 # up GCP / Jamendo / Gemini credentials.
 #
+# Topology: `master` stays the production-ready codebase (Cloud Run / GCP path). This demo
+# lives on the `agent/demo-github-pages` branch only — master never carries demo config,
+# so a deploy to production can't accidentally ship simulated data.
+#
 # One-time setup: repository Settings → Pages → Build and deployment → Source: GitHub Actions.
 
 on:
   push:
-    branches: [master]
+    branches: [agent/demo-github-pages]
   workflow_dispatch:
 
 permissions:

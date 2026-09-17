@@ -24,7 +24,7 @@ Demo estática publicada en **GitHub Pages**. Corre 100% en el navegador sobre u
 | :---: | :---: |
 | ![Vista mobile](docs/screenshots/final_mobile.png) | ![Vista tablet](docs/screenshots/final_tablet.png) |
 
-> En la demo, cada llamada a `/api` se resuelve contra un catálogo local (`frontend/src/services/demoCatalog.js`) en vez del backend, y el header muestra el badge **Demo · catálogo simulado** para dejar en claro que los datos son de muestra. La demo se publica automáticamente con [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) en cada push a `master`.
+> En la demo, cada llamada a `/api` se resuelve contra un catálogo local (`frontend/src/services/demoCatalog.js`) en vez del backend, y el header muestra el badge **Demo · catálogo simulado** para dejar en claro que los datos son de muestra. La demo se publica automáticamente con [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) en cada push a la rama `agent/demo-github-pages` — `master` mantiene sólo el código de producción (Cloud Run / GCP) y nunca lleva configuración de demo.
 
 ---
 

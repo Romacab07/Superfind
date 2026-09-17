@@ -16,12 +16,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /**
- * LocalDiskMusicProvider — Integrates external USB drive / local audio folders
+ * LocalDiskMusicProvider — Integrates a user-provided local audio folder
  * seamlessly into SoundWave's discovery universe as an external MusicCatalogProvider.
  *
  * Guarantees zero footprint in production:
  * - Active only in local/non-GCP profiles (@Profile("!gcp")).
  * - Read-only access to host audio files.
+ * - Idle unless {@code LOCAL_MUSIC_PATH} points to an existing folder, so a fresh clone
+ *   starts with an empty local catalog instead of failing.
  */
 @Component
 @Profile("!gcp")
@@ -29,10 +31,8 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
 
     private static final Logger log = LoggerFactory.getLogger(LocalDiskMusicProvider.class);
 
-    @Value("${soundwave.local-music.path:/app/local-music}")
+    @Value("${soundwave.local-music.path:}")
     private String localMusicPath;
-
-    private static final String HOST_FALLBACK_PATH = "E:/Pendrive 2022/Musica/Cachengue y trapo/Trvup tranca";
 
     private static final List<String> AESTHETIC_COVERS = List.of(
             "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
@@ -45,30 +45,30 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
             "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80"
     );
 
+    /**
+     * @return the configured music folder, or {@code null} when the provider is not configured.
+     */
     public File resolveMusicDirectory() {
-        if (localMusicPath != null && !localMusicPath.isBlank()) {
-            File dir = new File(localMusicPath);
-            if (dir.exists() && dir.isDirectory()) {
-                return dir;
-            }
+        if (localMusicPath == null || localMusicPath.isBlank()) {
+            return null;
         }
-        File fallback = new File(HOST_FALLBACK_PATH);
-        if (fallback.exists() && fallback.isDirectory()) {
-            return fallback;
-        }
-        return new File(localMusicPath != null ? localMusicPath : "/app/local-music");
+        return new File(localMusicPath.trim());
     }
 
     @Override
     public String getProviderName() {
-        return "LOCAL_PENDRIVE";
+        return "LOCAL_DISK";
     }
 
     @Override
     public List<ExternalTrackDto> fetchLatestTracks(int limit) {
         File musicDir = resolveMusicDirectory();
-        if (!musicDir.exists() || !musicDir.isDirectory()) {
-            log.warn("Local pendrive music directory not accessible: {}", musicDir.getAbsolutePath());
+        if (musicDir == null) {
+            log.debug("Local disk provider is idle: LOCAL_MUSIC_PATH is not set");
+            return Collections.emptyList();
+        }
+        if (!musicDir.isDirectory()) {
+            log.warn("Local music directory not accessible: {}", musicDir.getAbsolutePath());
             return Collections.emptyList();
         }
 
@@ -95,29 +95,31 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
 
             String encodedFile = URLEncoder.encode(rawName, StandardCharsets.UTF_8).replace("+", "%20");
             String audioUrl = "/api/tracks/stream-local?file=" + encodedFile;
+            // Local files carry no public catalog metadata: derive a stable synthetic identity.
+            String localId = Integer.toHexString(rawName.hashCode());
             String coverUrl = AESTHETIC_COVERS.get(Math.abs(rawName.hashCode()) % AESTHETIC_COVERS.size());
 
             // Estimated duration based on file length (~128kbps = 16KB/s)
             int durationSeconds = (int) Math.max(90, Math.min(420, file.length() / 16000));
 
             ExternalTrackDto dto = ExternalTrackDto.builder()
-                    .externalId("pendrive-" + Math.abs(rawName.hashCode()))
+                    .externalId("local-" + localId)
                     .title(parsed.title)
                     .artist(parsed.artist)
-                    .genre("Trap / Urbano")
+                    .genre("Local Library")
                     .audioUrl(audioUrl)
                     .coverUrl(coverUrl)
                     .durationSeconds(durationSeconds)
                     .releaseDate(now.minus(i * 5L, ChronoUnit.MINUTES))
-                    .license("Uso Personal / Pendrive")
-                    .licenseUrl("https://creativecommons.org/licenses/by/4.0/")
+                    .license("User Provided — Local File")
+                    .licenseUrl("")
                     .providerName(getProviderName())
                     .build();
 
             tracks.add(dto);
         }
 
-        log.info("Successfully fetched {} tracks from local pendrive [{}]", tracks.size(), musicDir.getAbsolutePath());
+        log.info("Successfully fetched {} tracks from the local music folder [{}]", tracks.size(), musicDir.getAbsolutePath());
         return tracks;
     }
 
@@ -131,7 +133,7 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
     @Override
     public boolean isAvailable() {
         File dir = resolveMusicDirectory();
-        return dir.exists() && dir.isDirectory();
+        return dir != null && dir.isDirectory();
     }
 
     public static class ParsedTrack {
@@ -164,7 +166,7 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
         name = name.replaceAll("(?i)\\s*_\\s*A\\s+COLORS\\s+SHOW", "");
         name = name.replaceAll("(?i)\\s*_[a-zA-Z0-9]{8,15}_(320|128)kbps(\\s*\\(\\d+\\))?", "");
 
-        String artist = "Artista Urbano";
+        String artist = "Unknown Artist";
         String title = name;
 
         if (name.contains(" - ")) {
@@ -185,8 +187,8 @@ public class LocalDiskMusicProvider implements MusicCatalogProvider {
         title = title.replaceAll("\\s{2,}", " ").trim();
         artist = artist.replaceAll("\\s{2,}", " ").trim();
 
-        if (artist.isEmpty()) artist = "Artista Urbano";
-        if (title.isEmpty()) title = "Pista Pendrive";
+        if (artist.isEmpty()) artist = "Unknown Artist";
+        if (title.isEmpty()) title = "Untitled Track";
 
         return new ParsedTrack(artist, title);
     }

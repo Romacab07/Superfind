@@ -1,0 +1,4 @@
+# Drop your own audio files here (mp3 / wav / m4a / ogg) to see them in the local disk provider.
+#
+# This folder is mounted read-only into the backend container at /app/local-music and its
+# contents are git-ignored — only this placeholder is tracked.

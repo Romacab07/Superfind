@@ -1,4 +1,4 @@
-# 🎵 SoundWave - Plataforma de Descubrimiento de Música Sin Copyright (Java + GCP + Gemini)
+# 🎵 Superfind - Plataforma de Descubrimiento de Música Sin Copyright (Java + GCP + Gemini)
 
 > Plataforma web de descubrimiento musical orientada a contenido **Creative Commons / Royalty-Free**, construida con **Java 21**, **Spring Boot 3**, infraestructura Serverless en **Google Cloud Platform (GCP)** e integración con **Gemini AI** para recomendaciones inteligentes y explicables.
 
@@ -48,7 +48,7 @@
 ## 📂 Estructura del Proyecto
 
 ```
-WWZ/
+Superfind/
 ├── backend/                         # Backend Java 21 / Spring Boot 3
 │   ├── src/main/java/com/soundwave/musicdiscovery/
 │   │   ├── config/                  # GCP, Gemini, CORS, Swagger OpenAPI
@@ -151,4 +151,4 @@ chmod +x deploy.sh
 ```
 
 ## 📚 Arquitectura y Diseño Técnico
-Consulta el archivo [`ARCHITECTURE.md`](file:///F:/WWZ/ARCHITECTURE.md) para acceder a los diagramas de arquitectura detallados, modelo de datos y flujo de componentes.
+Consulta el archivo [`ARCHITECTURE.md`](ARCHITECTURE.md) para acceder a los diagramas de arquitectura detallados, modelo de datos y flujo de componentes.

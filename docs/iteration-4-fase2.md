@@ -324,13 +324,13 @@ Esta funcionalidad se prepara arquitectónicamente en esta fase:
 ### Verificación Automatizada
 ```bash
 # 1. Frontend build
-cd F:\WWZ\frontend && npm run build
+cd frontend && npm run build
 
 # 2. Frontend test suite
-cd F:\WWZ\frontend && npm test
+cd frontend && npm test
 
 # 3. Backend tests
-cd F:\WWZ && .\mvnw.cmd test
+cd backend && .\mvnw.cmd test
 ```
 
 ### Verificación Visual

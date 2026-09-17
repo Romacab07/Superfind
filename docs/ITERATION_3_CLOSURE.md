@@ -15,20 +15,20 @@ El prototipo previo de Three.js lucía estático y anticuado por tres razones ma
 ### 2. Galería de Capturas Definitivas
 
 * **Three.js Modo Claro Refinado (10/10)**:
-  [`docs/screenshots/three_10_desktop_light_v2.png`](file:///F:/WWZ/docs/screenshots/three_10_desktop_light_v2.png)
+  [`docs/screenshots/three_10_desktop_light_v2.png`](screenshots/three_10_desktop_light_v2.png)
   * Transparencia cristalina del centro que permite apreciar el horizonte líquido y las microburbujas del fondo.
   * Destellos anamórficos de estrella de 4 puntas centelleante en el cuadrante superior derecho.
   * Arco lunar fino superior izquierdo sin sobreexposición blanca (*zero white blowout*).
   * Ondulación viva en la silueta.
 
 * **Three.js Modo Oscuro Refinado (10/10)**:
-  [`docs/screenshots/three_10_desktop_dark_v2.png`](file:///F:/WWZ/docs/screenshots/three_10_desktop_dark_v2.png)
+  [`docs/screenshots/three_10_desktop_dark_v2.png`](screenshots/three_10_desktop_dark_v2.png)
   * Eliminación total de medialunas blancas o recortes sólidos.
   * Pompas de jabón cósmicas en la oscuridad con aros iridiscentes de neón líquido (cian, esmeralda, violeta, magenta) y centro oscuro translúcido.
   * Hero Track activo (*Urban Pulse*) con halo gravitacional respirando al compás de la música.
 
 * **Canvas 2D Intacto**:
-  [`BubbleWorld.jsx`](file:///F:/WWZ/frontend/src/components/BubbleWorld.jsx) permanece 100% inalterado como benchmark visual continuo.
+  [`BubbleWorld.jsx`](../frontend/src/components/BubbleWorld.jsx) permanece 100% inalterado como benchmark visual continuo.
 
 * **Validación en Docker Compose**:
-  Captura en [`docs/screenshots/docker_three_10_desktop.png`](file:///F:/WWZ/docs/screenshots/docker_three_10_desktop.png) ejecutándose en `http://localhost:3000`.
+  Captura en [`docs/screenshots/docker_three_10_desktop.png`](screenshots/docker_three_10_desktop.png) ejecutándose en `http://localhost:3000`.

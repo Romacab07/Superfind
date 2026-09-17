@@ -24,3 +24,10 @@ __pycache__/
 .env.*.local
 *.key
 *.pem
+
+# Local music library (user-provided audio files, never committed)
+music/*
+!music/.gitkeep
+
+# Local agent / tooling configuration
+.abacusai/

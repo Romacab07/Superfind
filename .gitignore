@@ -33,3 +33,7 @@ music/*
 
 # Local agent / tooling configuration
 .abacusai/
+skills/
+.agents/**/data/
+.agents/**/fixtures/
+*.pyc

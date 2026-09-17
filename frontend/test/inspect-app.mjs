@@ -58,12 +58,12 @@ async function run() {
     console.log('📸 Capturing Tablet (1024x768)...');
     await browser.setViewport(1024, 768);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\current_tablet.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'current_tablet.png'));
 
     console.log('📸 Capturing Mobile (390x844)...');
     await browser.setViewport(390, 844);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\current_mobile.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'current_mobile.png'));
 
     console.log('✅ All inspections completed successfully!');
   } catch (err) {

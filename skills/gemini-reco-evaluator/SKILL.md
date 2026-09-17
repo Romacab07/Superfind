@@ -1,11 +1,11 @@
 ---
 name: gemini-reco-evaluator
-description: Evalúa, prueba y calibra la calidad y balance de las recomendaciones generadas por Gemini AI y el motor heurístico en SoundWave.
+description: Evalúa, prueba y calibra la calidad y balance de las recomendaciones generadas por Gemini AI y el motor heurístico en Superfind.
 ---
 
 # Gemini Recommendation Evaluator Skill
 
-Esta skill permite validar que el algoritmo de recomendación de **SoundWave** cumpla con su objetivo central: **rescatar artistas emergentes y joyas ocultas sin perder afinidad musical**.
+Esta skill permite validar que el algoritmo de recomendación de **Superfind** cumpla con su objetivo central: **rescatar artistas emergentes y joyas ocultas sin perder afinidad musical**.
 
 ## Criterios de Evaluación de Recomendaciones:
 

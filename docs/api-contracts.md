@@ -1,4 +1,4 @@
-# API Contracts — SoundWave Music Discovery
+# API Contracts — Superfind Music Discovery
 
 Especificación de contratos HTTP, payloads y respuestas JSON estandarizadas de la API REST.
 

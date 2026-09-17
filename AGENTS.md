@@ -1,8 +1,8 @@
-# AGENTS.md — SoundWave (Music Discovery Platform)
+# AGENTS.md — Superfind (Music Discovery Platform)
 
 ## 1. Objetivo del Proyecto
 
-**SoundWave** es una aplicación web de descubrimiento de música sin derechos de autor (Creative Commons / CC0 / Royalty-Free) construida con estándares de ingeniería enterprise para portfolio profesional y entrevistas técnicas.
+**Superfind** es una aplicación web de descubrimiento de música sin derechos de autor (Creative Commons / CC0 / Royalty-Free) construida con estándares de ingeniería enterprise para portfolio profesional y entrevistas técnicas.
 
 ### Stack Tecnológico:
 * **Backend**: Java 21 (LTS), Spring Boot 3.4.3 (Arquitectura de **Monolito Modular**).

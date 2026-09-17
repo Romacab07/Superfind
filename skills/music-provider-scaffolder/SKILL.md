@@ -1,11 +1,11 @@
 ---
 name: music-provider-scaffolder
-description: Genera e integra rápidamente un nuevo proveedor de música externa (ej. Free Music Archive, Audius, Freesound) implementando el patrón Strategy y registrándolo en el catálogo de SoundWave.
+description: Genera e integra rápidamente un nuevo proveedor de música externa (ej. Free Music Archive, Audius, Freesound) implementando el patrón Strategy y registrándolo en el catálogo de Superfind.
 ---
 
 # Music Provider Scaffolder Skill
 
-Esta skill guía la incorporación de nuevas APIs y catálogos de música sin copyright al backend de **SoundWave**, asegurando el cumplimiento del principio *Open/Closed* de SOLID.
+Esta skill guía la incorporación de nuevas APIs y catálogos de música sin copyright al backend de **Superfind**, asegurando el cumplimiento del principio *Open/Closed* de SOLID.
 
 ## Procedimiento para Agregar un Nuevo Proveedor:
 

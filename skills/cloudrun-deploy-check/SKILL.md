@@ -5,7 +5,7 @@ description: Checklist de validación previa y verificación post-despliegue par
 
 # Cloud Run & GCP Pre-Deploy Checklist Skill
 
-Esta skill proporciona una lista de verificación paso a paso para desplegar **SoundWave** en GCP de forma segura, con costo cero en reposo y sin exponer credenciales.
+Esta skill proporciona una lista de verificación paso a paso para desplegar **Superfind** en GCP de forma segura, con costo cero en reposo y sin exponer credenciales.
 
 ## 1. Verificación Previa:
 - [ ] Proyecto GCP creado y facturación habilitada (dentro del Free Tier).

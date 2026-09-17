@@ -1,6 +1,6 @@
 # Gemini AI Prompt Engineering & Heuristics Guide
 
-Este documento describe las directivas de prompting, esquemas JSON y parámetros de inferencia utilizados para el motor de recomendación inteligente en **SoundWave**.
+Este documento describe las directivas de prompting, esquemas JSON y parámetros de inferencia utilizados para el motor de recomendación inteligente en **Superfind**.
 
 ---
 

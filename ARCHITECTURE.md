@@ -1,5 +1,5 @@
 # Documento de Arquitectura Técnica & Guía para Entrevistas
-## Plataforma de Descubrimiento de Música Sin Copyright (SoundWave)
+## Plataforma de Descubrimiento de Música Sin Copyright (Superfind)
 
 Este documento detalla los principios de diseño, decisiones arquitectónicas y justificaciones técnicas del proyecto, diseñado para ser defendido en entrevistas técnicas para roles de **Java Backend Engineer**, **Cloud Engineer (GCP)** y **Full-Stack Developer**.
 

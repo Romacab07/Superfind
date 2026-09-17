@@ -1,6 +1,6 @@
-# Equipo de Agentes Especializados — SoundWave
+# Equipo de Agentes Especializados — Superfind
 
-Este documento describe la estructura organizativa, responsabilidades, herramientas y flujos de trabajo de los agentes especializados configurados para el proyecto **SoundWave**.
+Este documento describe la estructura organizativa, responsabilidades, herramientas y flujos de trabajo de los agentes especializados configurados para el proyecto **Superfind**.
 
 ---
 

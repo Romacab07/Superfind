@@ -1,4 +1,4 @@
-# Data Model — SoundWave Music Discovery
+# Data Model — Superfind Music Discovery
 
 Este documento especifica la estructura del modelo de datos canónico y el esquema de colecciones en **Google Cloud Firestore**.
 

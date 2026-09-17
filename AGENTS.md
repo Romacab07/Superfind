@@ -100,7 +100,7 @@ Firestore almacena las siguientes colecciones:
 3. **`sync_metadata`**: Checkpoints de sincronización por proveedor (`providerName`, `lastSyncAt`, `lastExternalId`, `newlyAddedTracks`, `status`).
 
 Directrices:
-* Antes de agregar campos o colecciones, consultar [`docs/data-model.md`](file:///F:/WWZ/docs/data-model.md).
+* Antes de agregar campos o colecciones, consultar [`docs/data-model.md`](docs/data-model.md).
 * Utilizar transacciones atómicas para contadores concurrentes.
 * Mantener la compatibilidad dual: Repositorios en memoria (`InMemoryTrackRepository`) para tests/local y `FirestoreTrackRepository` para perfil `gcp`.
 
@@ -121,8 +121,8 @@ Directrices:
 
 * **Cloud Run**: Servicio administrado con `min-instances: 0` y `max-instances: 5` para garantizar costo $0 en reposo.
 * **Cloud Scheduler**: Cron `*/10 * * * *` autenticado con OIDC Service Account.
-* **Terraform**: Toda la infraestructura se define en [`infra/main.tf`](file:///F:/WWZ/infra/main.tf).
-* **Docker Compose**: [`docker-compose.yml`](file:///F:/WWZ/docker-compose.yml) levanta Backend + Frontend con 1 comando.
+* **Terraform**: Toda la infraestructura se define en [`infra/main.tf`](infra/main.tf).
+* **Docker Compose**: [`docker-compose.yml`](docker-compose.yml) levanta Backend + Frontend con 1 comando.
 
 ---
 
@@ -137,7 +137,7 @@ Cada cambio debe estar respaldado por pruebas:
    * Endpoints REST en `TrackControllerTest` (`/api/tracks/top-24h`, `/api/tracks/recent`, `/api/tracks/{id}/play`).
 3. **Frontend Build & Visual Verification**:
    * `npm run build` en el directorio `frontend/`.
-   * Auditoría de fidelidad visual y diseño por `visual_qa` (sin bloqueos críticos en composición, burbujas, player, dark mode ni responsive). Ver detalles en [`docs/team-agents.md`](file:///F:/WWZ/docs/team-agents.md).
+   * Auditoría de fidelidad visual y diseño por `visual_qa` (sin bloqueos críticos en composición, burbujas, player, dark mode ni responsive). Ver detalles en [`docs/team-agents.md`](docs/team-agents.md).
 
 ---
 

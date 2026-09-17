@@ -1,5 +1,5 @@
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-$outDir = "F:\WWZ\docs\screenshots"
+$outDir = Join-Path $PSScriptRoot "..\..\docs\screenshots"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # 1. Desktop Dark

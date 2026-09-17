@@ -1,4 +1,9 @@
 import { BrowserController } from './browser-controller.mjs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Repo-relative so the suite works from any clone, not just the original machine.
+const SCREENSHOT_DIR = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 
 async function runFullVerification() {
   const browser = new BrowserController();
@@ -16,7 +21,7 @@ async function runFullVerification() {
       localStorage.setItem('soundfind_theme', 'dark');
     `);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\final_desktop_dark.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'final_desktop_dark.png'));
 
     // 2. Physics Regression Test (Exact sequence from prompt)
     console.log('🔬 2. Physics Persistence Regression Sequence...');
@@ -70,7 +75,7 @@ async function runFullVerification() {
       localStorage.setItem('soundfind_theme', 'light');
     `);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\final_desktop_light.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'final_desktop_light.png'));
 
     // 4. Tablet (1024x768)
     console.log('📸 4. Tablet (1024x768)...');
@@ -80,13 +85,13 @@ async function runFullVerification() {
       localStorage.setItem('soundfind_theme', 'dark');
     `);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\final_tablet.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'final_tablet.png'));
 
     // 5. Mobile (390x844)
     console.log('📸 5. Mobile (390x844)...');
     await browser.setViewport(390, 844);
     await browser.wait(600);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\final_mobile.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'final_mobile.png'));
 
     console.log('🎉 Full verification suite completed successfully!');
   } catch (err) {

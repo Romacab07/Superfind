@@ -1,5 +1,9 @@
 import { BrowserController } from './browser-controller.mjs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Repo-relative so the suite works from any clone, not just the original machine.
+const SCREENSHOT_DIR = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 
 async function run() {
   const browser = new BrowserController();
@@ -17,13 +21,13 @@ async function run() {
     await browser.setViewport(1920, 1080);
     await browser.evaluate(`document.documentElement.classList.add('dark');`);
     await browser.wait(500);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\current_desktop_dark.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'current_desktop_dark.png'));
 
     // 2. Capture Desktop Light Mode
     console.log('📸 Capturing Desktop Light Mode screenshot...');
     await browser.evaluate(`document.documentElement.classList.remove('dark');`);
     await browser.wait(500);
-    await browser.screenshot('F:\\WWZ\\docs\\screenshots\\current_desktop_light.png');
+    await browser.screenshot(path.join(SCREENSHOT_DIR, 'current_desktop_light.png'));
 
     // Restore Dark mode
     await browser.evaluate(`document.documentElement.classList.add('dark');`);

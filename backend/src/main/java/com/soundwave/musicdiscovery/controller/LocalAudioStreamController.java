@@ -18,11 +18,13 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * LocalAudioStreamController — Streams audio files with HTTP Byte-Range support (206 Partial Content)
- * directly from the mounted local pendrive / folder for seamless timeline scrubbing in the browser.
+ * directly from a user-provided local music folder for seamless timeline scrubbing in the browser.
  *
  * Spring's ResourceHttpMessageConverter automatically handles Range requests for Resource returns.
  *
  * Active only in local environments (@Profile("!gcp")).
+ * Requires the {@code LOCAL_MUSIC_PATH} environment variable; without it the endpoint stays disabled
+ * so the app runs out of the box with no local audio folder attached.
  */
 @RestController
 @Profile("!gcp")
@@ -31,23 +33,17 @@ public class LocalAudioStreamController {
 
     private static final Logger log = LoggerFactory.getLogger(LocalAudioStreamController.class);
 
-    @Value("${soundwave.local-music.path:/app/local-music}")
+    @Value("${soundwave.local-music.path:}")
     private String localMusicPath;
 
-    private static final String HOST_FALLBACK_PATH = "E:/Pendrive 2022/Musica/Cachengue y trapo/Trvup tranca";
-
+    /**
+     * @return the configured music folder, or {@code null} when local streaming is not configured.
+     */
     private File resolveMusicDirectory() {
-        if (localMusicPath != null && !localMusicPath.isBlank()) {
-            File dir = new File(localMusicPath);
-            if (dir.exists() && dir.isDirectory()) {
-                return dir;
-            }
+        if (localMusicPath == null || localMusicPath.isBlank()) {
+            return null;
         }
-        File fallback = new File(HOST_FALLBACK_PATH);
-        if (fallback.exists() && fallback.isDirectory()) {
-            return fallback;
-        }
-        return new File(localMusicPath != null ? localMusicPath : "/app/local-music");
+        return new File(localMusicPath.trim());
     }
 
     @GetMapping("/stream-local")
@@ -62,6 +58,11 @@ public class LocalAudioStreamController {
         }
 
         File musicDir = resolveMusicDirectory();
+        if (musicDir == null || !musicDir.isDirectory()) {
+            log.warn("Local audio streaming is disabled: set LOCAL_MUSIC_PATH to a readable folder");
+            return ResponseEntity.notFound().build();
+        }
+
         File audioFile = new File(musicDir, fileName);
 
         if (!audioFile.exists() || !audioFile.isFile()) {

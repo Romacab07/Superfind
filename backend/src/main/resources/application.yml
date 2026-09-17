@@ -63,10 +63,11 @@ music:
     generic-open:
       enabled: false
 
-# Local Pendrive Music Storage (Non-production / Test only)
+# Local music folder (non-production). Point LOCAL_MUSIC_PATH at any folder with audio files.
+# Leave it unset to keep the local disk provider disabled — the app boots fine either way.
 soundwave:
   local-music:
-    path: ${LOCAL_MUSIC_PATH:/app/local-music}
+    path: ${LOCAL_MUSIC_PATH:}
 
 # CORS Configuration
 app:
